@@ -609,22 +609,30 @@ let lastTranscript = '';
 const BRANDS = [
   // 국내
   '롬앤','rom&nd','3CE','쓰리컨셉아이즈',
-  '클리오','에뛰드','이니스프리','innisfree','라네즈','laneige',
-  '헤라','설화수','숨37','아모레퍼시픽','미샤','missha',
-  '토니모리','홀리카홀리카','페리페라','peripera',
+  '클리오','clio','에뛰드','etude','이니스프리','innisfree','라네즈','laneige',
+  '헤라','hera','설화수','숨37','아모레퍼시픽','미샤','missha',
+  '토니모리','tonymoly','홀리카홀리카','holika','페리페라','peripera',
   '조선미녀','토리든','닥터지','달바','아누아','코스알엑스','cosrx',
   '더페이스샵','네이처리퍼블릭','스킨푸드','바닐라코','어퓨',
   '에스쁘아','espoir','투쿨포스쿨','웨이크메이크','wakemake',
   '데이지크','dasique','아임미미','가히','kahi',
   '메디힐','닥터자르트','마녀공장','라운드랩','파파레서피',
   '비디비치','vdl','오페라','opera','글린트','필리밀리',
+  '정샘물','jung saem mool','jungs aem mool',
+  '아이소이','isoi','닥터브란트','셀퓨전씨','제이준','abib','어비브',
+  '메디큐브','medicube','스킨1004','skin1004','구달','goodal',
+  '일리윤','연작','오휘','ohui','whoo','후','숨','su:m','su m',
+  '이니스프리','라운드어라운드','프롬네이처','비플레인',
   // 해외
   '맥','mac','샤넬','chanel','디올','dior','나스','nars',
-  '랑콤','lancome','이브생로랑','ysl','조르지오아르마니','armani',
-  '샬롯틸버리','charlotte tilbury','메이크업포에버','mufe',
+  '랑콤','lancome','이브생로랑','ysl','조르지오아르마니','armani','giorgio armani',
+  '샬롯틸버리','charlotte tilbury','메이크업포에버','mufe','make up for ever',
   '베네피트','benefit','어반디케이','urban decay','투페이스드','타르트','tarte',
-  '모르피','morphe','nyx','닉스','메이블린','maybelline',
+  '모르피','morphe','nyx','닉스','메이블린','maybelline','covergirl',
   '로레알','loreal','케이트','kate','캔메이크','canmake','세자느','cezanne',
+  '클라란스','clarins','비오템','biotherm','키엘','kiehl',
+  '바비브라운','bobbi brown','로라메르시에','laura mercier',
+  '맥스팩터','max factor','레브론','revlon','밀라니','milani',
 ];
 
 const CATEGORY_KW = {
@@ -632,17 +640,19 @@ const CATEGORY_KW = {
   '쿠션':'쿠션', 'cushion':'쿠션',
   '컨실러':'컨실러', 'concealer':'컨실러',
   '프라이머':'베이스/프라이머', 'primer':'베이스/프라이머', '베이스':'베이스/프라이머',
+  '물크림':'베이스/프라이머', '수분크림':'베이스/프라이머', '톤업크림':'베이스/프라이머',
+  '크림':'베이스/프라이머', 'cream':'베이스/프라이머', '로션':'베이스/프라이머',
   '세팅파우더':'세팅파우더/픽서', '파우더':'세팅파우더/픽서', '픽서':'세팅파우더/픽서',
-  '세팅스프레이':'세팅파우더/픽서',
-  '블러셔':'블러셔', '블러쉬':'블러셔', '치크':'블러셔', 'blush':'블러셔',
-  '하이라이터':'하이라이터', 'highlighter':'하이라이터',
-  '컨투어':'컨투어/쉐딩', '쉐딩':'컨투어/쉐딩', '쉐이딩':'컨투어/쉐딩',
-  '아이브로우':'아이브로우', '브로우':'아이브로우', '눈썹':'아이브로우', 'brow':'아이브로우',
-  '아이섀도우':'아이섀도우', '섀도우':'아이섀도우', '팔레트':'아이섀도우', 'shadow':'아이섀도우', 'eyeshadow':'아이섀도우',
+  '세팅스프레이':'세팅파우더/픽서', 'powder':'세팅파우더/픽서', 'setting':'세팅파우더/픽서',
+  '블러셔':'블러셔', '블러쉬':'블러셔', '치크':'블러셔', 'blush':'블러셔', 'blusher':'블러셔',
+  '하이라이터':'하이라이터', 'highlighter':'하이라이터', 'highlight':'하이라이터',
+  '컨투어':'컨투어/쉐딩', '쉐딩':'컨투어/쉐딩', '쉐이딩':'컨투어/쉐딩', 'contour':'컨투어/쉐딩',
+  '아이브로우':'아이브로우', '브로우':'아이브로우', '눈썹':'아이브로우', 'brow':'아이브로우', 'eyebrow':'아이브로우',
+  '아이섀도우':'아이섀도우', '섀도우':'아이섀도우', '팔레트':'아이섀도우', 'shadow':'아이섀도우', 'eyeshadow':'아이섀도우', 'palette':'아이섀도우',
   '아이라이너':'아이라이너', '라이너':'아이라이너', 'liner':'아이라이너', 'eyeliner':'아이라이너',
   '마스카라':'마스카라', 'mascara':'마스카라',
-  '틴트':'립', '립틴트':'립', '립스틱':'립', '립글로스':'립', '립밤':'립',
-  'tint':'립', 'lipstick':'립', 'lip':'립',
+  '틴트':'립', '립틴트':'립', '립스틱':'립', '립글로스':'립', '립밤':'립', '립':'립',
+  'tint':'립', 'lipstick':'립', 'lip':'립', 'gloss':'립',
 };
 
 const IDOL_KEYWORDS = [
@@ -679,6 +689,44 @@ function detectShade(text) {
 function detectPrice(text) {
   const m = text.match(/[\d,]+\s*원/);
   return m ? m[0].trim() : null;
+}
+
+function extractProductsFromOCR(ocrText) {
+  const lines = ocrText.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 1);
+  const results = [];
+  const seen = new Set();
+
+  // 단일 줄 + 2줄 조합 + 3줄 조합 순으로 시도 (브랜드와 제품명이 다른 줄에 있는 경우 처리)
+  const candidates = [];
+  for (let i = 0; i < lines.length; i++) {
+    candidates.push(lines[i]);
+    if (i + 1 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1]);
+    if (i + 2 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1] + ' ' + lines[i+2]);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate.length > 150) continue;
+    const brand    = detectBrand(candidate);
+    if (!brand) continue;
+
+    const category = detectCategory(candidate);
+    const shade    = detectShade(candidate);
+    const price    = detectPrice(candidate);
+
+    let name = candidate;
+    try { name = name.replace(new RegExp(brand, 'gi'), ''); } catch {}
+    if (shade) name = name.replace(shade, '');
+    if (price) name = name.replace(price, '');
+    name = name.replace(/[|/\\,_.]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!name || name.length < 1) name = brand;
+
+    const key = `${brand.toLowerCase()}-${name.slice(0,20)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    results.push({ category, brand, name, shade: shade||null, price: price||null });
+  }
+  return results;
 }
 
 function extractProducts(description, transcript) {
@@ -1398,9 +1446,9 @@ async function runImageAnalysis() {
 
     const ocrText = texts.join('\n');
 
-    // 2단계: 키워드 매칭으로 제품 추출
+    // 2단계: 키워드 매칭으로 제품 추출 (여러 줄 조합 인식 포함)
     setImgStatus('<div class="spin-wrap"><div class="spinner"></div>제품 정보 분석 중...</div>');
-    let products = extractProducts(ocrText, '');
+    let products = extractProductsFromOCR(ocrText);
     let hashtags = generateHashtags('', creatorInfo, products);
 
     // 3단계: Gemini 키 있으면 AI 보정 시도
