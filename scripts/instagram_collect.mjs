@@ -358,8 +358,20 @@ async function main() {
     ...sorted.filter(i => !i.todayPick),
   ];
 
-  await writeJson(queuePath, { generatedAt: nowIso(), items });
+  const queueData = { generatedAt: nowIso(), items };
+  await writeJson(queuePath, queueData);
   console.log(`Done. Queue: ${items.length}개 (오늘 픽 ${pickCount}개)`);
+
+  // 추가 경로에도 동기화 (워크트리 등)
+  for (const extraDir of (config.additionalQueuePaths || [])) {
+    const extraPath = path.resolve(root, extraDir, "instagram_queue.json");
+    try {
+      await writeJson(extraPath, queueData);
+      console.log(`Synced → ${extraPath}`);
+    } catch (e) {
+      console.warn(`Sync failed (${extraPath}): ${e.message}`);
+    }
+  }
 
   if (shouldPublish || config.publishToGit) {
     const s = publishQueue();

@@ -7,6 +7,9 @@
   "bigAccountMinFollowers": 30000,
   "dailyPickCount": 15,
   "maxEnrichPerRun": 80,
+  "additionalQueuePaths": [
+    ".claude/worktrees/silly-vaughan-79f2c2"
+  ],
   "sources": [
     {
       "label": "저장한 게시물",
