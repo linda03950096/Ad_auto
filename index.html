@@ -466,23 +466,16 @@
     <div class="trigger-card">
       <div class="trigger-top">
         <div class="card-title" style="margin:0">🔄 지금 바로 분석하기</div>
-        <button class="btn btn-trigger" id="triggerBtn" onclick="triggerWorkflow()">▶ 지금 분석 시작</button>
+        <button class="btn btn-trigger" id="triggerBtn" onclick="runBrowserAnalysis()">▶ 지금 분석 시작</button>
       </div>
 
-      <div class="trigger-fields">
-        <div class="field" style="margin:0">
-          <label>GitHub 레포 (owner/repo)</label>
-          <input type="text" id="ghRepo" placeholder="linda009603/your-repo" />
-        </div>
-        <div class="field" style="margin:0">
-          <label>GitHub Personal Access Token</label>
-          <input type="password" id="ghToken" placeholder="ghp_..." autocomplete="off" />
-        </div>
+      <div class="field" style="margin-bottom:.6rem">
+        <label>YouTube Data API Key</label>
+        <input type="password" id="ytApiKey" placeholder="AIzaSy..." autocomplete="off" />
       </div>
-      <p class="hint" style="margin-top:-.2rem">
-        PAT 발급: GitHub → Settings → Developer settings → Personal access tokens (Classic) →
-        <code style="font-size:.75rem;background:#f5f0f5;padding:.1rem .3rem;border-radius:4px">workflow</code> 권한 선택.
-        &nbsp;<a href="https://github.com/settings/tokens/new?scopes=workflow" target="_blank" rel="noopener">바로 발급 →</a>
+      <p class="hint">
+        🔑 Anthropic 키는 <strong>✍️ 직접 분석</strong> 탭 설정값을 자동으로 사용합니다.<br>
+        YouTube 키 발급: <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → YouTube Data API v3 → 사용 설정 → 사용자 인증 정보 → API 키 생성
       </p>
 
       <div id="triggerStatus"></div>
@@ -923,142 +916,197 @@ function resetAll() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  WORKFLOW TRIGGER (수동 실행)
+//  브라우저 직접 분석 (YouTube API + Claude API)
 // ══════════════════════════════════════════════════════════════
 
-// 저장된 GitHub 설정 복원
-$id('ghRepo').value  = load('_mss_ghrepo');
-$id('ghToken').value = load('_mss_ghtoken');
-$id('ghRepo').addEventListener('input',  e => save('_mss_ghrepo',  e.target.value));
-$id('ghToken').addEventListener('input', e => save('_mss_ghtoken', e.target.value));
-
-let pollTimer    = null;
-let pollStart    = null;
-const POLL_MAX   = 15 * 60 * 1000;  // 15분 최대 대기
-const POLL_INTERVAL = 15 * 1000;    // 15초마다 확인
+$id('ytApiKey').value = load('_mss_ytkey');
+$id('ytApiKey').addEventListener('input', e => save('_mss_ytkey', e.target.value));
 
 function setTriggerStatus(html, type = 'info') {
   $id('triggerStatus').innerHTML = html
     ? `<div class="status ${type}">${html}</div>` : '';
 }
 
-async function triggerWorkflow() {
-  const repo  = $id('ghRepo').value.trim();
-  const token = $id('ghToken').value.trim();
-  const btn   = $id('triggerBtn');
+async function runBrowserAnalysis() {
+  const ytKey    = $id('ytApiKey').value.trim();
+  const claudeKey = load('_mss_apikey');
+  const btn      = $id('triggerBtn');
 
-  if (!repo || !token) {
-    setTriggerStatus('❌ GitHub 레포와 Personal Access Token을 모두 입력해주세요.', 'err');
-    return;
-  }
-  const [owner, repoName] = repo.split('/');
-  if (!owner || !repoName) {
-    setTriggerStatus('❌ 레포 형식을 확인해주세요 (예: linda009603/my-repo)', 'err');
-    return;
-  }
+  if (!ytKey)     { setTriggerStatus('❌ YouTube Data API 키를 입력해주세요.', 'err'); return; }
+  if (!claudeKey) { setTriggerStatus('❌ Anthropic API 키가 없습니다. <strong>✍️ 직접 분석</strong> 탭에서 먼저 입력해주세요.', 'err'); return; }
 
   btn.disabled = true;
-  btn.textContent = '⏳ 실행 중...';
-  setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>GitHub Actions 워크플로우 시작하는 중...</div>');
+  btn.textContent = '⏳ 분석 중...';
 
   try {
-    const r = await fetch(
-      `https://api.github.com/repos/${owner}/${repoName}/actions/workflows/daily-analysis.yml/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ref: 'main' }),
-      }
-    );
+    // 1단계: 유튜브 검색 (오늘 → 7일 → 30일 순으로 확장)
+    let candidates = [], daysBack = 1;
+    for (const days of [1, 7, 30]) {
+      daysBack   = days;
+      candidates = await searchYouTube(ytKey, days);
+      if (candidates.length >= 5) break;
+      if (days < 30) setTriggerStatus(
+        `<div class="spin-wrap"><div class="spinner"></div>최근 ${days}일 결과 부족 → 범위 확장 중...</div>`
+      );
+    }
+    if (!candidates.length) throw new Error('검색 결과가 없습니다. 잠시 후 다시 시도해주세요.');
 
-    if (r.status === 404) throw new Error('레포를 찾을 수 없습니다. owner/repo 이름을 확인해주세요.');
-    if (r.status === 401) throw new Error('토큰이 올바르지 않습니다. PAT를 다시 확인해주세요.');
-    if (r.status === 422) throw new Error('"main" 브랜치가 없습니다. 브랜치명을 확인해주세요.');
-    if (!r.ok) throw new Error(`GitHub API 오류 (${r.status})`);
+    // 2단계: 조회수·좋아요 기준 상위 5개 선정
+    setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>상위 영상 선정 중...</div>');
+    const details = await getYouTubeDetails(ytKey, candidates.slice(0, 50));
+    details.sort((a, b) => scoreVideo(b) - scoreVideo(a));
+    const top5 = details.slice(0, 5);
 
-    // 204 No Content = 성공적으로 트리거됨
-    pollStart = Date.now();
+    // 3단계: 영상별 자막 추출 + Claude 분석
+    const results = [];
+    for (let i = 0; i < top5.length; i++) {
+      const item    = top5[i];
+      const vid     = item.id;
+      const title   = item.snippet.title;
+      const channel = item.snippet.channelTitle;
+      const pct     = Math.round((i / top5.length) * 85);
+
+      setTriggerStatus(
+        `<div class="spin-wrap"><div class="spinner"></div>(${i + 1}/${top5.length}) "${title.slice(0, 28)}..." 분석 중</div>
+         <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`
+      );
+
+      const transcript = await fetchTranscript(vid);
+      const analysis   = await analyzeRaw(transcript, title, channel, claudeKey);
+      const post       = buildPost(analysis.products || [], channel, analysis.hashtags || []);
+
+      results.push({
+        videoId:          vid,
+        title,
+        channelTitle:     channel,
+        thumbnail:        item.snippet.thumbnails?.medium?.url || '',
+        publishedAt:      item.snippet.publishedAt,
+        url:              `https://www.youtube.com/watch?v=${vid}`,
+        viewCount:        parseInt(item.statistics?.viewCount  || 0),
+        likeCount:        parseInt(item.statistics?.likeCount  || 0),
+        products:         analysis.products  || [],
+        hashtags:         analysis.hashtags  || [],
+        postText:         post,
+        transcriptFetched: !!transcript,
+      });
+    }
+
+    // 4단계: 결과 표시
+    const now  = new Date();
+    const data = {
+      date:        now.toISOString().split('T')[0],
+      generatedAt: now.toISOString(),
+      timeWindow:  `최근 ${daysBack}일`,
+      videos:      results,
+    };
+
+    dailyLoaded = true;
+    $id('dailyContent').innerHTML = renderDailyPicks(data);
     setTriggerStatus(
-      `<div class="spin-wrap"><div class="spinner"></div>분석 시작됨! 완료까지 약 5~10분 소요됩니다. 자동으로 결과를 불러옵니다...</div>
-      <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>`
+      `✅ 완료! 영상 ${results.length}개 분석됨.
+       <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>`,
+      'ok'
     );
-
-    // 3초 뒤부터 폴링 시작 (워크플로우 등록 시간 확보)
-    setTimeout(() => startPolling(owner, repoName, token), 3000);
 
   } catch (err) {
     setTriggerStatus(`❌ ${esc(err.message)}`, 'err');
-    btn.disabled = false;
+  } finally {
+    btn.disabled    = false;
     btn.textContent = '▶ 지금 분석 시작';
   }
 }
 
-function startPolling(owner, repo, token) {
-  clearInterval(pollTimer);
-  pollTimer = setInterval(() => pollWorkflowRun(owner, repo, token), POLL_INTERVAL);
-}
+async function searchYouTube(ytKey, daysBack) {
+  const after   = new Date(Date.now() - daysBack * 86400000).toISOString();
+  const queries = [
+    { q: '메이크업 손민수',           order: 'date'      },
+    { q: '아이돌 메이크업 따라하기',   order: 'viewCount' },
+    { q: '셀럽 메이크업 손민수 제품',  order: 'relevance' },
+    { q: '뷰티 메이크업 신제품 리뷰',  order: 'date'      },
+  ];
 
-async function pollWorkflowRun(owner, repo, token) {
-  const elapsed = Date.now() - pollStart;
-
-  // 진행 바 업데이트 (최대 90%까지, 완료 시 100%)
-  const pct = Math.min(90, Math.round((elapsed / POLL_MAX) * 100) + 5);
-  const bar = $id('progressBar');
-  if (bar) bar.style.width = pct + '%';
-
-  if (elapsed > POLL_MAX) {
-    clearInterval(pollTimer);
-    setTriggerStatus('⚠️ 시간이 초과됐습니다. GitHub Actions 탭에서 직접 결과를 확인해주세요.', 'warn');
-    resetTriggerBtn();
-    return;
-  }
-
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/runs?workflow_id=daily-analysis.yml&per_page=1`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+  const seen = new Set(), ids = [];
+  for (const { q, order } of queries) {
+    try {
+      const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams({
+        key: ytKey, q, type: 'video', part: 'snippet',
+        relevanceLanguage: 'ko', regionCode: 'KR',
+        videoCategoryId: '26', publishedAfter: after,
+        order, maxResults: '15',
+      }));
+      if (!r.ok) {
+        const e = await r.json();
+        throw new Error(e.error?.message || `YouTube API 오류 (${r.status})`);
       }
-    );
-    const data = await r.json();
-    const run  = data.workflow_runs?.[0];
-    if (!run) return;
-
-    if (run.status === 'completed') {
-      clearInterval(pollTimer);
-      if (bar) bar.style.width = '100%';
-
-      if (run.conclusion === 'success') {
-        setTriggerStatus('✅ 분석 완료! 결과를 불러오는 중...', 'ok');
-        // GH Pages 캐시 반영 대기 후 리로드
-        setTimeout(async () => {
-          dailyLoaded = false;
-          await loadDailyPicks();
-          setTriggerStatus('✅ 새 분석 결과가 반영됐습니다!', 'ok');
-          resetTriggerBtn();
-        }, 5000);
-      } else {
-        setTriggerStatus(`❌ 워크플로우 실패 (${run.conclusion}). GitHub Actions 탭에서 로그를 확인해주세요.`, 'err');
-        resetTriggerBtn();
+      const data = await r.json();
+      for (const item of data.items || []) {
+        const id = item.id?.videoId;
+        if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
       }
+    } catch (e) {
+      if (e.message.includes('API') || e.message.includes('key') || e.message.includes('quota')) throw e;
     }
-    // queued / in_progress 는 계속 폴링
-  } catch { /* 네트워크 오류 무시, 다음 폴링 때 재시도 */ }
+  }
+  return ids;
 }
 
-function resetTriggerBtn() {
-  const btn = $id('triggerBtn');
-  btn.disabled    = false;
-  btn.textContent = '▶ 지금 분석 시작';
+async function getYouTubeDetails(ytKey, videoIds) {
+  const r = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({
+    key: ytKey, id: videoIds.join(','), part: 'snippet,statistics',
+  }));
+  if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || 'YouTube API 오류'); }
+  return (await r.json()).items || [];
+}
+
+function scoreVideo(item) {
+  const stats   = item.statistics || {};
+  const views   = parseInt(stats.viewCount || 0);
+  const likes   = parseInt(stats.likeCount || 0);
+  const ageH    = item.snippet?.publishedAt
+    ? (Date.now() - new Date(item.snippet.publishedAt)) / 3600000 : 9999;
+  const recency = Math.max(0.2, 1 - ageH / 168);
+  return (views + likes * 10) * (1 + recency);
+}
+
+async function analyzeRaw(transcript, title, channel, apiKey) {
+  const content = transcript || `영상 제목: ${title}\n채널: ${channel}`;
+  const prompt  = `다음은 유튜브 메이크업 영상 정보입니다.
+
+제목: ${title}
+채널: ${channel}
+내용:
+${content.slice(0, 9000)}
+
+영상에서 언급된 메이크업 제품을 추출하고 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+
+{
+  "products": [{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"호수(없으면 null)","price":"가격(없으면 null)"}],
+  "hashtags": ["#해시태그"]
+}
+
+카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
+규칙: 실제 언급 제품만, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력`;
+
+  const r = await fetch(CLAUDE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      load('_mss_model') || 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages:   [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `Claude API 오류 (${r.status})`); }
+  const data = await r.json();
+  const raw  = data.content?.[0]?.text || '';
+  const m    = raw.match(/\{[\s\S]*\}/);
+  return m ? JSON.parse(m[0]) : { products: [], hashtags: [] };
 }
 
 // ══════════════════════════════════════════════════════════════
