@@ -1878,6 +1878,7 @@ function renderInstaCard(item, i) {
   const preview  = (item.caption || '').slice(0, 120).replace(/\n/g, ' ');
   const username = item.username || item.sourceLabel || '크리에이터';
   const ago      = timeAgo(item.collectedAt);
+  _instaData[i]  = { products, username };
 
   const productRows = products.length
     ? products.map((p, pi) => `
@@ -1930,6 +1931,8 @@ function renderInstaCard(item, i) {
   </div>`;
 }
 
+const _instaData = {};
+
 // 인스타 게시물 포맷 빌드
 function buildInstaPost(products, creatorInfo, extraHashtags) {
   const byCategory = {};
@@ -1937,14 +1940,15 @@ function buildInstaPost(products, creatorInfo, extraHashtags) {
     (byCategory[p.category] = byCategory[p.category] || []).push(p);
   }
 
-  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ ${creatorInfo} 메이크업 손민수\n`;
+  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n✺ ${creatorInfo} 메이크업 손민수\n`;
   for (const [cat, items] of Object.entries(byCategory)) {
     out += `\n♡ ${cat}\n`;
     for (const p of items) {
       const name  = [p.brand, p.name].filter(Boolean).join(' ');
-      const shade = p.shade ? ` / ${p.shade}` : '';
-      const price = p.price ? ` / ${p.price}` : ' / 가격입력';
-      out += `${name}${shade}${price}\n🔗 링크입력\n`;
+      const shade = p.shade ? ` #${p.shade.replace(/^#/, '')}` : '';
+      const price = p.price ? ` / ${p.price}` : ' / 원';
+      const link  = p.link  ? `🔗 ${p.link}` : '🔗';
+      out += `${name}${shade}${price}\n${link}\n`;
     }
   }
   const tags = generateHashtags('', creatorInfo, products);
@@ -1954,24 +1958,17 @@ function buildInstaPost(products, creatorInfo, extraHashtags) {
 
 // 가격/링크 입력 시 게시물 텍스트 실시간 업데이트
 function updateInstaPost(cardIdx) {
-  const rows = document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`);
-  const products = [];
+  const stored = _instaData[cardIdx];
+  if (!stored) return;
 
-  // 현재 카드의 원본 products 재추출은 어렵기 때문에 textarea 직접 업데이트
-  const ta = $id(`insta-post-${cardIdx}`);
-  let text = ta.value;
-
-  // 링크/가격 placeholder 치환
-  rows.forEach(row => {
-    const priceInput = row.querySelector('[data-field="price"]');
-    const linkInput  = row.querySelector('[data-field="link"]');
-    const price = priceInput?.value.trim();
-    const link  = linkInput?.value.trim();
-    if (price) text = text.replace('가격입력', price);
-    if (link)  text = text.replace('링크입력', link);
+  const products = stored.products.map((p, pi) => {
+    const row   = document.querySelector(`#insta-${cardIdx}-row-${pi}`);
+    const price = row?.querySelector('[data-field="price"]')?.value.trim() || null;
+    const link  = row?.querySelector('[data-field="link"]')?.value.trim() || null;
+    return { ...p, price, link };
   });
 
-  ta.value = text;
+  $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, []);
 }
 
 function toggleInsta(i) {
