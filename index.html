@@ -399,6 +399,8 @@
       .pick-thumb { width: 100%; }
     }
   </style>
+<!-- GitHub Actions가 secrets에서 생성한 키 파일 (없으면 무시) -->
+<script src="keys.js" onerror="window.__KEYS=window.__KEYS||{}"></script>
 </head>
 <body>
 
@@ -570,12 +572,29 @@ const $id  = id => document.getElementById(id);
 const save = (k,v) => { try { localStorage.setItem(k,v); } catch {} };
 const load = k    => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 
+// GitHub Actions가 주입한 키 우선, 없으면 localStorage
+const K = window.__KEYS || {};
+if (K.yt)     save('_mss_ytkey',      K.yt);
+if (K.gemini) save('_mss_geminikey',  K.gemini);
+
 // 저장된 키 복원
 $id('ytApiKeyManual').value = load('_mss_ytkey');
 $id('geminiKey').value      = load('_mss_geminikey');
 
 $id('ytApiKeyManual').addEventListener('input', e => save('_mss_ytkey',      e.target.value));
 $id('geminiKey').addEventListener('input',      e => save('_mss_geminikey',  e.target.value));
+
+// 키가 자동 주입된 경우 API 설정 카드 접어두기
+if (K.yt || K.gemini) {
+  const apiCard = $id('ytApiKeyManual').closest('.card');
+  if (apiCard) {
+    const notice = document.createElement('div');
+    notice.className = 'status ok';
+    notice.style.cssText = 'margin-top:.6rem;font-size:.8rem';
+    notice.textContent = '✅ API 키가 서버에서 자동으로 로드됐습니다.';
+    apiCard.appendChild(notice);
+  }
+}
 
 $id('youtubeUrl').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
 
