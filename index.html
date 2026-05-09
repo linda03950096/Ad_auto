@@ -584,18 +584,14 @@ $id('geminiKey').value      = load('_mss_geminikey');
 $id('ytApiKeyManual').addEventListener('input', e => save('_mss_ytkey',      e.target.value));
 $id('geminiKey').addEventListener('input',      e => save('_mss_geminikey',  e.target.value));
 
-// 키가 자동 주입된 경우 API 설정 카드 숨김
-if (K.yt && K.gemini) {
-  const apiCard = $id('ytApiKeyManual').closest('.card');
-  if (apiCard) apiCard.style.display = 'none';
-} else if (K.yt || K.gemini) {
-  // 일부만 있으면 안내 메시지만 표시
+// 키가 자동 주입된 경우 안내 표시 (카드는 유지)
+if (K.yt || K.gemini) {
   const apiCard = $id('ytApiKeyManual').closest('.card');
   if (apiCard) {
     const notice = document.createElement('div');
     notice.className = 'status ok';
     notice.style.cssText = 'margin-top:.6rem;font-size:.8rem';
-    notice.textContent = '✅ 일부 API 키가 서버에서 자동으로 로드됐습니다.';
+    notice.textContent = '✅ API 키가 서버에서 자동으로 로드됐습니다. 직접 바꾸려면 아래에 입력하세요.';
     apiCard.appendChild(notice);
   }
 }
