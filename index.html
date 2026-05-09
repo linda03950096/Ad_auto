@@ -258,6 +258,35 @@
       border-radius: 20px;
       font-weight: 600;
     }
+    .daily-segments {
+      display: flex;
+      gap: .45rem;
+      flex-wrap: wrap;
+      margin-top: .8rem;
+    }
+    .daily-segment {
+      border: 1.5px solid var(--border);
+      background: #fff;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: .42rem .85rem;
+      font-size: .82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .daily-segment.active {
+      background: #fde8f3;
+      color: var(--pink-dark);
+      border-color: var(--pink);
+    }
+    .daily-section { display: none; }
+    .daily-section.active { display: block; }
+    .section-title {
+      font-size: .9rem;
+      font-weight: 800;
+      color: var(--pink-dark);
+      margin: 0 0 .8rem;
+    }
 
     /* toggle arrow */
     .pick-toggle { font-size: .8rem; color: var(--muted); flex-shrink: 0; align-self: center; transition: transform .2s; }
@@ -940,7 +969,8 @@ async function loadDailyPicks() {
     const r    = await fetch(`./daily_picks.json?_=${Date.now()}`);
     const data = await r.json();
 
-    if (!data.videos?.length) {
+    const sections = getDailySections(data);
+    if (!sections.some(section => section.videos.length)) {
       el.innerHTML = renderEmpty();
       return;
     }
@@ -965,25 +995,58 @@ function renderEmpty() {
   </div>`;
 }
 
+function getDailySections(data) {
+  if (data.sections) {
+    return [
+      { key:'shorts', label:data.sections.shorts?.label || '숏폼', timeWindow:data.sections.shorts?.timeWindow || data.timeWindow || '', videos:data.sections.shorts?.videos || [] },
+      { key:'longs',  label:data.sections.longs?.label  || '롱폼', timeWindow:data.sections.longs?.timeWindow  || data.timeWindow || '', videos:data.sections.longs?.videos  || [] },
+    ];
+  }
+  return [{ key:'all', label:'전체', timeWindow:data.timeWindow || '', videos:data.videos || [] }];
+}
+
 function renderDailyPicks(data) {
   const todayKST = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'-').replace('.','');
+  const sections = getDailySections(data);
+  const total = sections.reduce((sum, section) => sum + section.videos.length, 0);
+  const activeKey = sections.find(section => section.videos.length)?.key || sections[0]?.key || 'all';
 
   let html = `<div class="card" style="padding:1rem 1.5rem">
     <div class="picks-meta">
       <span class="date-badge">📅 ${data.date || todayKST}</span>
-      <span class="window-badge">검색 범위: ${data.timeWindow || ''} · ${data.videos.length}개 영상</span>
+      <span class="window-badge">추천 ${total}개 영상</span>
     </div>
+    ${sections.length > 1 ? `<div class="daily-segments">
+      ${sections.map(section => `<button class="daily-segment ${section.key === activeKey ? 'active' : ''}" onclick="showDailySection('${section.key}')">${section.label} ${section.videos.length}</button>`).join('')}
+    </div>` : ''}
   </div>`;
 
-  data.videos.forEach((v, i) => {
+  sections.forEach(section => {
+    html += `<div class="daily-section ${section.key === activeKey ? 'active' : ''}" id="daily-section-${section.key}">
+      <div class="section-title">${section.label} 추천 <span style="font-weight:600;color:var(--muted)">검색 범위: ${section.timeWindow || ''}</span></div>`;
+    if (!section.videos.length) {
+      html += `<div class="card"><p style="color:var(--muted);text-align:center;padding:.5rem">추천 영상이 없습니다.</p></div></div>`;
+      return;
+    }
+    section.videos.forEach((v, i) => {
+      html += renderDailyPickCard(v, `${section.key}-${i}`);
+    });
+    html += '</div>';
+  });
+
+  return html;
+}
+
+function renderDailyPickCard(v, id) {
     const views    = v.viewCount ? formatNum(v.viewCount) + ' 조회' : '';
     const likes    = v.likeCount ? '♥ ' + formatNum(v.likeCount)    : '';
     const pubAgo   = timeAgo(v.publishedAt);
+    const duration = v.durationText || (v.durationSeconds ? formatDuration(v.durationSeconds) : '');
     const catTags  = [...new Set(v.products.map(p => p.category))].slice(0,4);
     const noSub    = !v.transcriptFetched;
 
-    html += `<div class="pick-card" id="pick-${i}">
-      <div class="pick-header" onclick="togglePick(${i})">
+    return `<div class="pick-card" id="pick-${id}">
+      <div class="pick-header" onclick="togglePick('${id}')">
         <img class="pick-thumb" src="${v.thumbnail}" alt="" loading="lazy"
              onerror="this.style.background='#f0e0ea';this.removeAttribute('src')">
         <div class="pick-info">
@@ -993,6 +1056,7 @@ function renderDailyPicks(data) {
             ${views  ? `<span class="pick-stat">👁 ${views}</span>` : ''}
             ${likes  ? `<span class="pick-stat">${likes}</span>`    : ''}
             ${pubAgo ? `<span class="pick-stat">🕐 ${pubAgo}</span>` : ''}
+            ${duration ? `<span class="pick-stat">⏱ ${duration}</span>` : ''}
           </div>
           <div class="pick-tags">
             ${catTags.map(c => `<span class="tag-mini">${c}</span>`).join('')}
@@ -1012,16 +1076,13 @@ function renderDailyPicks(data) {
 
         <div style="margin-top:1rem">
           <label style="font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:.4rem">📋 게시물 텍스트 (편집 후 복사)</label>
-          <textarea class="pick-output" id="post-${i}" rows="16">${esc(v.postText)}</textarea>
+          <textarea class="pick-output" id="post-${id}" rows="16">${esc(v.postText)}</textarea>
           <div class="btn-row">
-            <button class="btn btn-sm btn-copy" onclick="copyPick(${i})">📋 복사</button>
+            <button class="btn btn-sm btn-copy" onclick="copyPick('${id}')">📋 복사</button>
           </div>
         </div>
       </div>
     </div>`;
-  });
-
-  return html;
 }
 
 function renderMiniTable(products) {
@@ -1041,18 +1102,32 @@ function renderMiniTable(products) {
   return h;
 }
 
-function togglePick(i) {
-  const card = $id(`pick-${i}`);
+function showDailySection(key) {
+  document.querySelectorAll('.daily-section').forEach(el => el.classList.toggle('active', el.id === `daily-section-${key}`));
+  document.querySelectorAll('.daily-segment').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${key}'`)));
+}
+
+function togglePick(id) {
+  const card = $id(`pick-${id}`);
   card.classList.toggle('open');
 }
 
-function copyPick(i) {
-  const ta  = $id(`post-${i}`);
+function copyPick(id) {
+  const ta  = $id(`post-${id}`);
   const btn = ta.closest('.pick-body').querySelector('.btn-copy');
   navigator.clipboard.writeText(ta.value).then(() => {
     btn.textContent = '✅ 복사됨!';
     setTimeout(() => { btn.textContent = '📋 복사'; }, 2200);
   });
+}
+
+function formatDuration(seconds) {
+  seconds = Number(seconds || 0);
+  if (!seconds) return '';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1298,65 +1373,30 @@ async function runBrowserAnalysis() {
     if (!ytKey) throw new Error('YouTube API 키가 없습니다. ✍️ 직접 분析 탭 → API 설정에서 YouTube Data API Key를 먼저 입력해주세요.');
 
 
-    // 1단계: 유튜브 검색 (오늘 → 7일 → 30일 순으로 확장)
-    let candidates = [], daysBack = 1;
-    for (const days of [1, 7, 30]) {
-      daysBack   = days;
-      candidates = await searchYouTube(ytKey, days);
-      if (candidates.length >= 5) break;
-      if (days < 30) setTriggerStatus(
-        `<div class="spin-wrap"><div class="spinner"></div>최근 ${days}일 결과 부족 → 범위 확장 중...</div>`
-      );
-    }
-    if (!candidates.length) throw new Error('검색 결과가 없습니다. 잠시 후 다시 시도해주세요.');
-
-    // 2단계: 조회수·좋아요 기준 상위 5개 선정
-    setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>상위 영상 선정 중...</div>');
-    const details = await getYouTubeDetails(ytKey, candidates.slice(0, 50));
-    details.sort((a, b) => scoreVideo(b) - scoreVideo(a));
-    const top5 = details.slice(0, 5);
-
-    // 3단계: 영상별 자막 추출 + Claude 분석
-    const results = [];
-    for (let i = 0; i < top5.length; i++) {
-      const item    = top5[i];
-      const vid     = item.id;
-      const title   = item.snippet.title;
-      const channel = item.snippet.channelTitle;
-      const pct     = Math.round((i / top5.length) * 85);
-
-      setTriggerStatus(
-        `<div class="spin-wrap"><div class="spinner"></div>(${i + 1}/${top5.length}) "${title.slice(0, 28)}..." 분석 중</div>
-         <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`
-      );
-
-      const transcript  = await fetchTranscript(vid);
-      const description = item.snippet?.description || '';
-      const analysis    = await smartAnalyze(description, transcript, title, channel);
-      const post        = buildPost(analysis.products || [], channel, analysis.hashtags || []);
-
-      results.push({
-        videoId:          vid,
-        title,
-        channelTitle:     channel,
-        thumbnail:        item.snippet.thumbnails?.medium?.url || '',
-        publishedAt:      item.snippet.publishedAt,
-        url:              `https://www.youtube.com/watch?v=${vid}`,
-        viewCount:        parseInt(item.statistics?.viewCount  || 0),
-        likeCount:        parseInt(item.statistics?.likeCount  || 0),
-        products:         analysis.products  || [],
-        hashtags:         analysis.hashtags  || [],
-        postText:         post,
-        transcriptFetched: !!transcript,
-      });
+    const sections = {};
+    for (const section of [
+      { key:'shorts', label:'숏폼', durations:['short'] },
+      { key:'longs',  label:'롱폼', durations:['medium','long'] },
+    ]) {
+      const picked = await pickDailyVideos(ytKey, section);
+      const videos = await analyzeDailyVideos(picked.details, section.label);
+      sections[section.key] = {
+        label: section.label,
+        timeWindow: `최근 ${picked.daysBack || 30}일`,
+        videos,
+      };
     }
 
-    // 4단계: 결과 표시
+    const results = [...sections.shorts.videos, ...sections.longs.videos];
+    if (!results.length) throw new Error('검색 결과가 없습니다. 잠시 후 다시 시도해주세요.');
+
+    // 결과 표시
     const now  = new Date();
     const data = {
       date:        now.toISOString().split('T')[0],
       generatedAt: now.toISOString(),
-      timeWindow:  `최근 ${daysBack}일`,
+      timeWindow:  '숏폼/롱폼 분리',
+      sections,
       videos:      results,
     };
 
@@ -1376,7 +1416,61 @@ async function runBrowserAnalysis() {
   }
 }
 
-async function searchYouTube(ytKey, daysBack) {
+async function pickDailyVideos(ytKey, section) {
+  for (const daysBack of [1, 7, 30]) {
+    setTriggerStatus(`<div class="spin-wrap"><div class="spinner"></div>${section.label} 추천 검색 중... (최근 ${daysBack}일)</div>`);
+    const candidates = await searchYouTube(ytKey, daysBack, section.durations);
+    if (!candidates.length) continue;
+
+    const details = await getYouTubeDetails(ytKey, candidates.slice(0, 50));
+    details.sort((a, b) => scoreVideo(b) - scoreVideo(a));
+    const top = details.slice(0, 5);
+    if (top.length >= 5 || daysBack === 30) return { daysBack, details: top };
+  }
+  return { daysBack: 30, details: [] };
+}
+
+async function analyzeDailyVideos(items, sectionLabel) {
+  const results = [];
+  for (let i = 0; i < items.length; i++) {
+    const item    = items[i];
+    const vid     = item.id;
+    const title   = item.snippet.title;
+    const channel = item.snippet.channelTitle;
+    const pct     = Math.round((i / items.length) * 85);
+
+    setTriggerStatus(
+      `<div class="spin-wrap"><div class="spinner"></div>${sectionLabel} (${i + 1}/${items.length}) "${title.slice(0, 28)}..." 분석 중</div>
+       <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`
+    );
+
+    const transcript  = await fetchTranscript(vid);
+    const description = item.snippet?.description || '';
+    const analysis    = await smartAnalyze(description, transcript, title, channel);
+    const post        = buildPost(analysis.products || [], channel, analysis.hashtags || []);
+    const durationSeconds = parseYouTubeDuration(item.contentDetails?.duration);
+
+    results.push({
+      videoId:          vid,
+      title,
+      channelTitle:     channel,
+      thumbnail:        item.snippet.thumbnails?.medium?.url || '',
+      publishedAt:      item.snippet.publishedAt,
+      url:              `https://www.youtube.com/watch?v=${vid}`,
+      durationSeconds,
+      durationText:     formatDuration(durationSeconds),
+      viewCount:        parseInt(item.statistics?.viewCount  || 0),
+      likeCount:        parseInt(item.statistics?.likeCount  || 0),
+      products:         analysis.products  || [],
+      hashtags:         analysis.hashtags  || [],
+      postText:         post,
+      transcriptFetched: !!transcript,
+    });
+  }
+  return results;
+}
+
+async function searchYouTube(ytKey, daysBack, durations = []) {
   const after   = new Date(Date.now() - daysBack * 86400000).toISOString();
   const queries = [
     { q: '메이크업 손민수',           order: 'date'      },
@@ -1387,32 +1481,37 @@ async function searchYouTube(ytKey, daysBack) {
 
   const seen = new Set(), ids = [];
   for (const { q, order } of queries) {
-    try {
-      const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams({
-        key: ytKey, q, type: 'video', part: 'snippet',
-        relevanceLanguage: 'ko', regionCode: 'KR',
-        videoCategoryId: '26', publishedAfter: after,
-        order, maxResults: '15',
-      }));
-      if (!r.ok) {
-        const e = await r.json();
-        throw new Error(e.error?.message || `YouTube API 오류 (${r.status})`);
+    for (const videoDuration of durations.length ? durations : ['']) {
+      try {
+        const params = {
+          key: ytKey, q, type: 'video', part: 'snippet',
+          relevanceLanguage: 'ko', regionCode: 'KR',
+          videoCategoryId: '26', publishedAfter: after,
+          order, maxResults: '15',
+        };
+        if (videoDuration) params.videoDuration = videoDuration;
+        const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams(params));
+        if (!r.ok) {
+          const e = await r.json();
+          throw new Error(e.error?.message || `YouTube API 오류 (${r.status})`);
+        }
+        const data = await r.json();
+        for (const item of data.items || []) {
+          const id = item.id?.videoId;
+          if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+        }
+      } catch (e) {
+        if (e.message.includes('API') || e.message.includes('key') || e.message.includes('quota')) throw e;
       }
-      const data = await r.json();
-      for (const item of data.items || []) {
-        const id = item.id?.videoId;
-        if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
-      }
-    } catch (e) {
-      if (e.message.includes('API') || e.message.includes('key') || e.message.includes('quota')) throw e;
     }
   }
   return ids;
 }
 
 async function getYouTubeDetails(ytKey, videoIds) {
+  if (!videoIds.length) return [];
   const r = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({
-    key: ytKey, id: videoIds.join(','), part: 'snippet,statistics',
+    key: ytKey, id: videoIds.join(','), part: 'snippet,statistics,contentDetails',
   }));
   if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || 'YouTube API 오류'); }
   return (await r.json()).items || [];
@@ -1426,6 +1525,13 @@ function scoreVideo(item) {
     ? (Date.now() - new Date(item.snippet.publishedAt)) / 3600000 : 9999;
   const recency = Math.max(0.2, 1 - ageH / 168);
   return (views + likes * 10) * (1 + recency);
+}
+
+function parseYouTubeDuration(duration) {
+  const m = String(duration || '').match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return 0;
+  const [, d='0', h='0', min='0', s='0'] = m;
+  return Number(d) * 86400 + Number(h) * 3600 + Number(min) * 60 + Number(s);
 }
 
 
