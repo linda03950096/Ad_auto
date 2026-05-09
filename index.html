@@ -1885,6 +1885,67 @@ async function runImageAnalysis() {
 // ══════════════════════════════════════════════════════════════
 //  INSTAGRAM QUEUE
 // ══════════════════════════════════════════════════════════════
+
+// 캡션 앞 메타("652 likes... - username - date: \"") 제거
+function cleanInstagramCaption(caption) {
+  return caption
+    .replace(/^\d[\d,]*\s*likes?[^"]*?"/, '')
+    .replace(/"\.?\s*$/, '')
+    .trim();
+}
+
+// 캡션 메타에서 작성자 ID 추출
+function extractUsernameFromCaption(caption) {
+  const m = caption.match(/^\d[\d,]*\s*likes?[^-]*-\s*([\w.]+)\s*-/);
+  return m ? m[1] : null;
+}
+
+// Gemini로 인스타 캡션 파싱
+async function analyzeInstaWithGemini(caption, geminiKey) {
+  const cleaned = cleanInstagramCaption(caption);
+  if (!cleaned || cleaned.length < 10) return [];
+
+  const accountMap = Object.entries(INSTA_ACCOUNT_BRANDS)
+    .map(([k, v]) => `@${k} → ${v}`).join('\n');
+
+  const prompt = `다음은 인스타그램 뷰티 게시물 캡션입니다.
+
+---
+${cleaned}
+---
+
+위 캡션에서 메이크업 제품 정보만 추출해 JSON으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+
+계정→브랜드 매핑 (캡션에 @계정명이 있으면 이 브랜드명으로 변환):
+${accountMap}
+
+카테고리 종류: 아이섀도우, 블러셔, 하이라이터, 립, 아이라이너, 마스카라, 아이브로우, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 컨투어/쉐딩, 기타
+
+규칙:
+- 감상평·광고문구·이벤트·구매안내는 모두 제거
+- shade: 컬러명 또는 번호 (없으면 null). 한글 컬러명도 포함 (예: 시나몬롤, 뮤티드 베이지, 세레나데)
+- 동일 제품 중복 제외
+- 실제 언급된 제품만 추출
+
+{"products":[{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"컬러명 또는 null"}]}`;
+
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature: 0.1 } }),
+    }
+  );
+  if (!r.ok) throw new Error(`Gemini API 오류 (${r.status})`);
+  const data = await r.json();
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const m    = raw.match(/\{[\s\S]*\}/);
+  if (!m) return [];
+  const parsed = JSON.parse(m[0]);
+  return (parsed.products || []).map(p => ({ ...p, price: null, link: null }));
+}
+
 async function loadInstaQueue() {
   const el = $id('instaContent');
   el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>큐 불러오는 중...</div></div>';
@@ -1903,17 +1964,36 @@ async function loadInstaQueue() {
     }
 
     el.innerHTML = items.map((item, i) => renderInstaCard(item, i)).join('');
+
+    // Gemini로 순차 분석 (키 없으면 키워드 추출 결과 유지)
+    const geminiKey = load('_mss_geminikey');
+    if (!geminiKey) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const caption = items[i].caption || '';
+      if (!caption) continue;
+      // 로딩 표시
+      const postEl = $id(`insta-post-${i}`);
+      if (postEl) postEl.placeholder = '✨ AI 분석 중...';
+      try {
+        const products = await analyzeInstaWithGemini(caption, geminiKey);
+        if (products.length) applyInstaProducts(i, products);
+      } catch { /* Gemini 실패 시 키워드 추출 결과 유지 */ }
+      if (postEl) postEl.placeholder = '';
+    }
   } catch {
     el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
   }
 }
 
 function renderInstaCard(item, i) {
-  const products = extractProducts(item.caption || '', '');
-  const preview  = (item.caption || '').slice(0, 120).replace(/\n/g, ' ');
-  const authorId = item.username || item.sourceLabel || '크리에이터';
-  const ago      = timeAgo(item.collectedAt);
-  _instaData[i]  = { products, username: authorId };
+  const rawCaption = item.caption || '';
+  const cleanedCap = cleanInstagramCaption(rawCaption);
+  const products   = extractProducts(rawCaption, '');
+  const preview    = cleanedCap.slice(0, 120).replace(/\n/g, ' ');
+  const authorId   = extractUsernameFromCaption(rawCaption) || item.username || '크리에이터';
+  const ago        = timeAgo(item.collectedAt);
+  _instaData[i]    = { products, username: authorId };
 
   const productRows = products.length
     ? products.map((p, pi) => `
@@ -1967,6 +2047,49 @@ function renderInstaCard(item, i) {
 }
 
 const _instaData = {};
+
+// Gemini 결과로 카드 UI 업데이트
+function applyInstaProducts(cardIdx, products) {
+  const stored = _instaData[cardIdx];
+  if (!stored) return;
+  stored.products = products;
+
+  const rows = products.map((p, pi) => `
+    <div class="product-edit-row" id="insta-${cardIdx}-row-${pi}">
+      <span class="cat-tag">${esc(p.category)}</span>
+      <span>${esc(p.brand ? p.brand + ' ' + p.name : p.name)}</span>
+      <span>${esc(p.shade || '—')}</span>
+      <input type="text" placeholder="가격 입력" value="${esc(p.price || '')}"
+             oninput="updateInstaPost(${cardIdx})" data-pi="${pi}" data-field="price">
+      <input type="text" placeholder="🔗 링크 붙여넣기"
+             oninput="updateInstaPost(${cardIdx})" data-pi="${pi}" data-field="link">
+    </div>`).join('');
+
+  const container = $id(`insta-products-${cardIdx}`);
+  if (!container) return;
+
+  // 헤더 교체
+  const prev = container.previousElementSibling;
+  if (prev?.classList.contains('product-edit-header')) prev.remove();
+  if (products.length) {
+    container.insertAdjacentHTML('beforebegin', `
+      <div class="product-edit-header">
+        <span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span>
+      </div>`);
+  }
+  container.innerHTML = rows || '<p style="font-size:.83rem;color:var(--muted);padding:.5rem 0">제품을 찾지 못했습니다.</p>';
+
+  // 제품 수 배지 업데이트
+  const card = $id(`insta-card-${cardIdx}`);
+  if (card) {
+    const prodStat = [...card.querySelectorAll('.pick-stat')].find(s => s.textContent.includes('제품'));
+    if (prodStat) prodStat.textContent = `🛍 제품 ${products.length}개 ✨`;
+    else card.querySelector('.pick-stats')?.insertAdjacentHTML('beforeend',
+      `<span class="pick-stat">🛍 제품 ${products.length}개 ✨</span>`);
+  }
+
+  $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, []);
+}
 
 // 카테고리 표시 순서
 const INSTA_CATEGORY_ORDER = ['아이섀도우', '블러셔', '하이라이터', '립'];
