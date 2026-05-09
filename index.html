@@ -352,6 +352,43 @@
       .trigger-fields { grid-template-columns: 1fr; }
     }
 
+    /* ── IMAGE UPLOAD ── */
+    .or-divider {
+      display: flex; align-items: center; gap: .8rem;
+      color: var(--muted); font-size: .82rem; margin: .2rem 0 1.2rem;
+    }
+    .or-divider::before, .or-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .img-drop-zone {
+      border: 2px dashed var(--border); border-radius: 12px;
+      padding: 1.8rem 1rem; text-align: center; cursor: pointer;
+      transition: all .18s; font-size: .88rem; color: var(--muted);
+      background: #fef8fb; user-select: none;
+    }
+    .img-drop-zone:hover, .img-drop-zone.drag-over {
+      border-color: var(--pink); background: #fff0f8; color: var(--pink-dark);
+    }
+    .img-drop-zone .drop-icon { font-size: 1.8rem; margin-bottom: .4rem; }
+    .img-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: .55rem; margin-top: .9rem;
+    }
+    .img-thumb {
+      position: relative; border-radius: 8px; overflow: hidden;
+      aspect-ratio: 1; background: #f0e0ea;
+    }
+    .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .img-thumb .rmv {
+      position: absolute; top: 3px; right: 3px;
+      background: rgba(0,0,0,.58); color: #fff;
+      border: none; border-radius: 50%;
+      width: 20px; height: 20px; font-size: .7rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .img-count { font-size: .78rem; color: var(--muted); margin-top: .45rem; }
+
     @media (max-width: 560px) {
       header h1 { font-size: 1.3rem; }
       .tab-btn { padding: .6rem 1.1rem; font-size: .85rem; }
@@ -433,6 +470,42 @@
       </button>
     </div>
 
+    <!-- 이미지 분석 -->
+    <div class="or-divider">또는</div>
+    <div class="card">
+      <div class="card-title">📸 캡쳐 이미지로 분석</div>
+      <p class="hint" style="margin-bottom:1rem;line-height:1.6">
+        영상 보면서 제품이 나오는 화면을 캡쳐해서 여기에 <strong>Ctrl+V</strong>로 붙여넣거나 파일을 올리면 자동 정리해드립니다.<br>
+        여러 장 한꺼번에 가능 · Gemini API 키 필요
+      </p>
+
+      <div class="row2" style="margin-bottom:1rem">
+        <div class="field">
+          <label>크리에이터 이름</label>
+          <input type="text" id="imgCreatorName" placeholder="예: 민수" />
+        </div>
+        <div class="field">
+          <label>그룹명 (선택)</label>
+          <input type="text" id="imgGroupName" placeholder="예: 아이브, 뉴진스" />
+        </div>
+      </div>
+
+      <div id="imgDropZone" class="img-drop-zone">
+        <div class="drop-icon">📋</div>
+        여기에 이미지 붙여넣기 (Ctrl+V)<br>
+        <span style="font-size:.78rem">또는 클릭해서 파일 선택 · 드래그 앤 드롭</span>
+        <input type="file" id="imgFileInput" accept="image/*" multiple style="display:none">
+      </div>
+
+      <div id="imgPreviewGrid" class="img-preview-grid"></div>
+      <div id="imgCount" class="img-count"></div>
+      <div id="imgStatus"></div>
+
+      <button class="btn btn-primary" id="imgAnalyzeBtn" onclick="runImageAnalysis()" style="margin-top:1rem">
+        📸 이미지 분석 시작
+      </button>
+    </div>
+
     <!-- 결과 -->
     <div id="resultSection" style="display:none">
       <div class="card">
@@ -494,8 +567,8 @@ const PROXY2 = 'https://api.allorigins.win/raw?url=';
 //  INIT — restore saved settings
 // ══════════════════════════════════════════════════════════════
 const $id  = id => document.getElementById(id);
-const save = (k,v) => localStorage.setItem(k,v);
-const load = k    => localStorage.getItem(k) || '';
+const save = (k,v) => { try { localStorage.setItem(k,v); } catch {} };
+const load = k    => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 
 // 저장된 키 복원
 $id('ytApiKeyManual').value = load('_mss_ytkey');
@@ -505,6 +578,8 @@ $id('ytApiKeyManual').addEventListener('input', e => save('_mss_ytkey',      e.t
 $id('geminiKey').addEventListener('input',      e => save('_mss_geminikey',  e.target.value));
 
 $id('youtubeUrl').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+
+initImageUpload();
 
 let lastTranscript = '';
 
@@ -1078,9 +1153,9 @@ async function runBrowserAnalysis() {
 
   try {
     const ytKey = load('_mss_ytkey');
-    if (!ytKey) throw new Error('YouTube API 키가 없습니다. ✍️ 직접 분석 탭 → API 설정에서 YouTube Data API Key를 먼저 입력해주세요.');
+    if (!ytKey) throw new Error('YouTube API 키가 없습니다. ✍️ 직접 분析 탭 → API 설정에서 YouTube Data API Key를 먼저 입력해주세요.');
 
-  try {
+
     // 1단계: 유튜브 검색 (오늘 → 7일 → 30일 순으로 확장)
     let candidates = [], daysBack = 1;
     for (const days of [1, 7, 30]) {
@@ -1211,6 +1286,124 @@ function scoreVideo(item) {
   return (views + likes * 10) * (1 + recency);
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  IMAGE ANALYSIS
+// ══════════════════════════════════════════════════════════════
+let uploadedImages = [];
+
+function initImageUpload() {
+  const zone  = $id('imgDropZone');
+  const input = $id('imgFileInput');
+
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', e => { addImageFiles([...e.target.files]); e.target.value = ''; });
+
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    addImageFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+
+  document.addEventListener('paste', e => {
+    const imgs = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/'));
+    if (imgs.length) addImageFiles(imgs.map(i => i.getAsFile()).filter(Boolean));
+  });
+}
+
+function addImageFiles(files) {
+  const slots = 10 - uploadedImages.length;
+  files.slice(0, slots).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      uploadedImages.push({ dataUrl: e.target.result, mimeType: file.type || 'image/jpeg' });
+      renderImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeImage(i) {
+  uploadedImages.splice(i, 1);
+  renderImagePreviews();
+}
+
+function renderImagePreviews() {
+  const grid = $id('imgPreviewGrid');
+  const cnt  = $id('imgCount');
+  if (!uploadedImages.length) {
+    grid.innerHTML = '';
+    cnt.textContent = '';
+    return;
+  }
+  grid.innerHTML = uploadedImages.map((img, i) => `
+    <div class="img-thumb">
+      <img src="${img.dataUrl}" alt="캡쳐 ${i+1}">
+      <button class="rmv" onclick="removeImage(${i})">✕</button>
+    </div>`).join('');
+  cnt.textContent = `${uploadedImages.length}장 선택됨 (최대 10장)`;
+}
+
+function setImgStatus(html, type = 'info') {
+  const el = $id('imgStatus');
+  el.innerHTML = html ? `<div class="status ${type}">${html}</div>` : '';
+}
+
+async function runImageAnalysis() {
+  const btn = $id('imgAnalyzeBtn');
+  btn.disabled = true; btn.textContent = '⏳ 분석 중...';
+
+  try {
+    if (!uploadedImages.length) throw new Error('이미지를 먼저 추가해주세요. (Ctrl+V 붙여넣기 또는 클릭해서 파일 선택)');
+    const geminiKey = load('_mss_geminikey');
+    if (!geminiKey) throw new Error('Gemini API 키가 필요합니다. 위 API 설정에서 입력해주세요.');
+
+    setImgStatus('<div class="spin-wrap"><div class="spinner"></div>이미지 분석 중...</div>');
+
+    const creatorName = $id('imgCreatorName').value.trim();
+    const groupName   = $id('imgGroupName').value.trim();
+    const creatorInfo = [groupName, creatorName].filter(Boolean).join(' ') || '크리에이터';
+
+    const parts = uploadedImages.map(img => ({
+      inline_data: { mime_type: img.mimeType, data: img.dataUrl.split(',')[1] }
+    }));
+    parts.push({ text: `위 이미지들은 메이크업 영상 캡쳐 사진입니다. 화면에 보이는 메이크업 제품명·브랜드를 찾아서 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+
+{
+  "products": [{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"호수(없으면 null)","price":"가격(없으면 null)"}],
+  "hashtags": ["#해시태그"]
+}
+
+카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
+규칙: 여러 이미지의 제품을 모두 합쳐서 중복 없이 정리, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력` });
+
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{parts}], generationConfig:{temperature:0.1} }) }
+    );
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || `Gemini 오류 (${r.status})`); }
+    const data = await r.json();
+    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const m    = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('분析 결과를 읽을 수 없습니다. 이미지에 제품이 잘 보이는지 확인해주세요.');
+    const result   = JSON.parse(m[0]);
+    const products = result.products || [];
+    const hashtags = result.hashtags || [];
+
+    renderTable(products);
+    $id('outputText').value = buildPost(products, creatorInfo, hashtags);
+    $id('resultSection').style.display = 'block';
+    $id('resultSection').scrollIntoView({ behavior:'smooth', block:'start' });
+    setImgStatus(`✅ 완료! 제품 ${products.length}개 추출됐어요.`, 'ok');
+
+  } catch (err) {
+    setImgStatus(`❌ ${esc(err.message)}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '📸 이미지 분석 시작';
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 //  UTILS
