@@ -233,9 +233,10 @@ async function main() {
   const config = await readJson(configPath, null);
   if (!config?.sources?.length) throw new Error(`No sources in ${configPath}`);
 
-  const MIN_LIKES        = config.minLikes              ?? 500;
-  const BIG_ACCOUNT_THR  = config.bigAccountMinFollowers ?? 50000;
+  const MIN_LIKES        = config.minLikes              ?? 300;
+  const BIG_ACCOUNT_THR  = config.bigAccountMinFollowers ?? 30000;
   const DAILY_PICK_COUNT = config.dailyPickCount         ?? 15;
+  const MAX_ENRICH       = config.maxEnrichPerRun        ?? 80;
 
   let pw;
   try { pw = await import("playwright"); }
@@ -271,15 +272,20 @@ async function main() {
       }
     }
 
-    console.log(`\nFound ${added} new post(s). Enriching...`);
+    console.log(`\nFound ${added} new post(s). Enriching (max ${MAX_ENRICH})...`);
 
-    // 2단계: 새 포스트 상세 스크랩
+    // 2단계: 새 포스트 상세 스크랩 (최대 MAX_ENRICH개)
+    let enrichCount = 0;
     for (const [key, item] of existing) {
-      if (item.status === "new") {
-        const enriched = await enrichPost(page, item);
-        existing.set(key, enriched);
-        await new Promise(r => setTimeout(r, 1500));
+      if (item.status !== "new") continue;
+      if (enrichCount >= MAX_ENRICH) {
+        existing.delete(key); // 이번 런에 처리 못한 항목은 다음 런에 처리
+        continue;
       }
+      const enriched = await enrichPost(page, item);
+      existing.set(key, enriched);
+      enrichCount++;
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     // 3단계: 필터링

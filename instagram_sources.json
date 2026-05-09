@@ -1,11 +1,12 @@
 {
   "chromeProfileDir": ".instagram-profile",
   "headless": false,
-  "scrollsPerSource": 12,
+  "scrollsPerSource": 3,
   "publishToGit": false,
   "minLikes": 300,
   "bigAccountMinFollowers": 30000,
   "dailyPickCount": 15,
+  "maxEnrichPerRun": 80,
   "sources": [
     {
       "label": "저장한 게시물",
