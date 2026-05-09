@@ -373,6 +373,52 @@
       font-size: .85rem;
     }
 
+    /* ── INSTAGRAM QUEUE ── */
+    .insta-card {
+      border: 1.5px solid var(--border); border-radius: 14px;
+      overflow: hidden; margin-bottom: 1.1rem; background: #fff;
+    }
+    .insta-header {
+      display: flex; gap: .8rem; padding: .9rem 1rem;
+      align-items: flex-start; cursor: pointer;
+    }
+    .insta-thumb {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border-radius: 8px; object-fit: cover; background: #f0e0ea;
+    }
+    .insta-info { flex: 1; min-width: 0; }
+    .insta-info .username { font-size: .8rem; font-weight: 700; color: var(--pink-dark); }
+    .insta-info .caption-preview {
+      font-size: .82rem; color: var(--muted); margin-top: .2rem;
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .insta-body { display: none; border-top: 1.5px solid var(--border); padding: 1rem; }
+    .insta-card.open .insta-body { display: block; }
+    .insta-card.open .pick-toggle { transform: rotate(180deg); }
+
+    .product-edit-row {
+      display: grid; grid-template-columns: 1.2fr 1.4fr .8fr 1fr 1.6fr;
+      gap: .4rem; align-items: center; padding: .4rem 0;
+      border-bottom: 1px solid #f5eef5; font-size: .83rem;
+    }
+    .product-edit-row:last-child { border-bottom: none; }
+    .product-edit-row input {
+      padding: .35rem .6rem; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: .82rem; width: 100%;
+    }
+    .product-edit-row .cat-tag {
+      font-size: .72rem; background: #fde8f3; color: var(--pink-dark);
+      padding: .15rem .45rem; border-radius: 20px; font-weight: 700; white-space: nowrap;
+    }
+    .product-edit-header {
+      display: grid; grid-template-columns: 1.2fr 1.4fr .8fr 1fr 1.6fr;
+      gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
+      padding: .3rem 0 .5rem; border-bottom: 2px solid var(--border); margin-bottom: .2rem;
+    }
+    @media (max-width: 600px) {
+      .product-edit-row, .product-edit-header { grid-template-columns: 1fr 1fr; }
+    }
+
     /* ── TRIGGER CARD ── */
     .trigger-card {
       background: linear-gradient(135deg, #fff5fb, #f5eeff);
@@ -479,7 +525,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-btn-manual" onclick="switchTab('manual')">✍️ 직접 분석</button>
     <button class="tab-btn"        id="tab-btn-daily"  onclick="switchTab('daily')">📅 오늘의 추천</button>
-    <button class="tab-btn"        id="tab-btn-instagram" onclick="switchTab('instagram')">📥 인스타 수집함</button>
+    <button class="tab-btn"        id="tab-btn-insta"  onclick="switchTab('insta')">📱 인스타 큐</button>
   </div>
 </header>
 
@@ -626,20 +672,21 @@
 
   </div><!-- /tab-daily -->
 
-  <!-- ══ TAB: 인스타 수집함 ═════════════════════════════════════ -->
-  <div id="tab-instagram" style="display:none">
+  <!-- ══ TAB: 인스타 큐 ══════════════════════════════════════ -->
+  <div id="tab-insta" style="display:none">
 
     <div class="card">
-      <div class="card-title">📥 인스타 수집함</div>
-      <p style="font-size:.84rem;color:var(--muted);line-height:1.6;">
-        내 PC에서 백그라운드 수집기가 저장한 릴스·게시물을 확인하는 공간입니다.<br>
-        수집기는 <code>instagram_sources.json</code>에 적어둔 저장 목록이나 계정 페이지를 주기적으로 확인합니다.
+      <div class="card-title">📱 인스타그램 큐</div>
+      <p style="font-size:.84rem;color:var(--muted);line-height:1.7">
+        PC에서 <code style="background:#f5f0f5;padding:.1rem .35rem;border-radius:4px">npm run collect:instagram</code> 실행 후 수집된 게시물이 여기 표시됩니다.<br>
+        캡션에서 제품이 자동 추출되고, <strong>가격·링크만 직접 입력</strong>하면 게시물 텍스트가 완성됩니다.
       </p>
+      <button class="btn btn-primary" style="margin-top:.9rem" onclick="loadInstaQueue()">🔄 큐 불러오기</button>
     </div>
 
-    <div id="instagramContent"></div>
+    <div id="instaContent"></div>
 
-  </div><!-- /tab-instagram -->
+  </div><!-- /tab-insta -->
 
 </div><!-- /wrap -->
 
@@ -1002,7 +1049,7 @@ async function smartAnalyze(description, transcript, title, channel) {
 //  TAB SWITCHER
 // ══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  ['manual','daily','instagram'].forEach(t => {
+  ['manual','daily','insta'].forEach(t => {
     $id(`tab-${t}`).style.display       = t === name ? '' : 'none';
     $id(`tab-btn-${t}`).classList.toggle('active', t === name);
   });
@@ -1798,6 +1845,146 @@ async function runImageAnalysis() {
   } finally {
     btn.disabled = false; btn.textContent = '📸 이미지 분석 시작';
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INSTAGRAM QUEUE
+// ══════════════════════════════════════════════════════════════
+async function loadInstaQueue() {
+  const el = $id('instaContent');
+  el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>큐 불러오는 중...</div></div>';
+
+  try {
+    const r    = await fetch(`./instagram_queue.json?_=${Date.now()}`);
+    const data = await r.json();
+    const items = (data.items || []).filter(i => i.caption || i.url);
+
+    if (!items.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state">
+        <div class="big">📭</div>
+        <p>수집된 게시물이 없습니다.<br>PC에서 <code>npm run collect:instagram</code> 을 먼저 실행해주세요.</p>
+      </div></div>`;
+      return;
+    }
+
+    el.innerHTML = items.map((item, i) => renderInstaCard(item, i)).join('');
+  } catch {
+    el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
+  }
+}
+
+function renderInstaCard(item, i) {
+  const products = extractProducts(item.caption || '', '');
+  const preview  = (item.caption || '').slice(0, 120).replace(/\n/g, ' ');
+  const username = item.username || item.sourceLabel || '크리에이터';
+  const ago      = timeAgo(item.collectedAt);
+
+  const productRows = products.length
+    ? products.map((p, pi) => `
+      <div class="product-edit-row" id="insta-${i}-row-${pi}">
+        <span class="cat-tag">${esc(p.category)}</span>
+        <span>${esc(p.brand ? p.brand + ' ' + p.name : p.name)}</span>
+        <span>${esc(p.shade || '—')}</span>
+        <input type="text" placeholder="가격 입력" value="${esc(p.price || '')}"
+               oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="price">
+        <input type="text" placeholder="🔗 링크 붙여넣기"
+               oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="link">
+      </div>`).join('')
+    : '<p style="font-size:.83rem;color:var(--muted);padding:.5rem 0">캡션에서 제품을 찾지 못했습니다. 아래 텍스트를 직접 편집하세요.</p>';
+
+  const postText = buildInstaPost(products, username, []);
+
+  return `<div class="insta-card" id="insta-card-${i}">
+    <div class="insta-header" onclick="toggleInsta(${i})">
+      ${item.image ? `<img class="insta-thumb" src="${esc(item.image)}" onerror="this.style.display='none'">` : '<div class="insta-thumb"></div>'}
+      <div class="insta-info">
+        <div class="username">@${esc(username)}</div>
+        <div class="caption-preview">${esc(preview)}</div>
+        <div class="pick-stats" style="margin-top:.35rem">
+          ${ago ? `<span class="pick-stat">🕐 ${ago}</span>` : ''}
+          ${products.length ? `<span class="pick-stat">🛍 제품 ${products.length}개</span>` : ''}
+          <a href="${esc(item.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
+             style="font-size:.75rem;color:var(--blue);text-decoration:none">▶ 인스타에서 보기</a>
+        </div>
+      </div>
+      <span class="pick-toggle">▼</span>
+    </div>
+
+    <div class="insta-body">
+      ${products.length ? `
+      <div class="product-edit-header">
+        <span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span>
+      </div>` : ''}
+      <div id="insta-products-${i}">${productRows}</div>
+
+      <div style="margin-top:1rem">
+        <label style="font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:.4rem">
+          📋 게시물 텍스트 (편집 후 복사)
+        </label>
+        <textarea class="pick-output" id="insta-post-${i}" rows="18">${esc(postText)}</textarea>
+        <div class="btn-row">
+          <button class="btn btn-sm btn-copy" onclick="copyInstaPost(${i})">📋 복사</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// 인스타 게시물 포맷 빌드
+function buildInstaPost(products, creatorInfo, extraHashtags) {
+  const byCategory = {};
+  for (const p of products) {
+    (byCategory[p.category] = byCategory[p.category] || []).push(p);
+  }
+
+  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ ${creatorInfo} 메이크업 손민수\n`;
+  for (const [cat, items] of Object.entries(byCategory)) {
+    out += `\n♡ ${cat}\n`;
+    for (const p of items) {
+      const name  = [p.brand, p.name].filter(Boolean).join(' ');
+      const shade = p.shade ? ` / ${p.shade}` : '';
+      const price = p.price ? ` / ${p.price}` : ' / 가격입력';
+      out += `${name}${shade}${price}\n🔗 링크입력\n`;
+    }
+  }
+  const tags = generateHashtags('', creatorInfo, products);
+  if (tags.length) out += '\n' + tags.join(' ');
+  return out;
+}
+
+// 가격/링크 입력 시 게시물 텍스트 실시간 업데이트
+function updateInstaPost(cardIdx) {
+  const rows = document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`);
+  const products = [];
+
+  // 현재 카드의 원본 products 재추출은 어렵기 때문에 textarea 직접 업데이트
+  const ta = $id(`insta-post-${cardIdx}`);
+  let text = ta.value;
+
+  // 링크/가격 placeholder 치환
+  rows.forEach(row => {
+    const priceInput = row.querySelector('[data-field="price"]');
+    const linkInput  = row.querySelector('[data-field="link"]');
+    const price = priceInput?.value.trim();
+    const link  = linkInput?.value.trim();
+    if (price) text = text.replace('가격입력', price);
+    if (link)  text = text.replace('링크입력', link);
+  });
+
+  ta.value = text;
+}
+
+function toggleInsta(i) {
+  $id(`insta-card-${i}`).classList.toggle('open');
+}
+
+function copyInstaPost(i) {
+  const ta  = $id(`insta-post-${i}`);
+  const btn = ta.closest('.insta-body').querySelector('.btn-copy');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✅ 복사됨!';
+    setTimeout(() => { btn.textContent = '📋 복사'; }, 2200);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
