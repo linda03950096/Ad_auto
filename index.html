@@ -662,10 +662,76 @@ const IDOL_KEYWORDS = [
 ];
 
 // ── 추출 헬퍼 ──────────────────────────────────────────────
+const BRAND_ALIASES = {
+  'jung saem mool': '정샘물',
+  'jungs aem mool': '정샘물',
+  'rom&nd': '롬앤',
+  'clio': '클리오',
+  'etude': '에뛰드',
+  'innisfree': '이니스프리',
+  'laneige': '라네즈',
+  'hera': '헤라',
+  'missha': '미샤',
+  'tonymoly': '토니모리',
+  'holika': '홀리카홀리카',
+  'peripera': '페리페라',
+  'cosrx': '코스알엑스',
+  'espoir': '에스쁘아',
+  'wakemake': '웨이크메이크',
+  'dasique': '데이지크',
+  'kahi': '가히',
+  'vdl': 'VDL',
+  'opera': '오페라',
+  'isoi': '아이소이',
+  'abib': '어비브',
+  'medicube': '메디큐브',
+  'skin1004': '스킨1004',
+  'goodal': '구달',
+  'ohui': '오휘',
+  'whoo': '후',
+  'su:m': '숨',
+  'su m': '숨',
+  'mac': '맥',
+  'chanel': '샤넬',
+  'dior': '디올',
+  'nars': '나스',
+  'lancome': '랑콤',
+  'ysl': '이브생로랑',
+  'armani': '조르지오아르마니',
+  'giorgio armani': '조르지오아르마니',
+  'charlotte tilbury': '샬롯틸버리',
+  'mufe': '메이크업포에버',
+  'make up for ever': '메이크업포에버',
+  'benefit': '베네피트',
+  'urban decay': '어반디케이',
+  'tarte': '타르트',
+  'morphe': '모르피',
+  'nyx': '닉스',
+  'maybelline': '메이블린',
+  'loreal': '로레알',
+  'kate': '케이트',
+  'canmake': '캔메이크',
+  'cezanne': '세자느',
+  'clarins': '클라란스',
+  'biotherm': '비오템',
+  'kiehl': '키엘',
+  'bobbi brown': '바비브라운',
+  'laura mercier': '로라메르시에',
+  'max factor': '맥스팩터',
+  'revlon': '레브론',
+  'milani': '밀라니',
+};
+
 function detectBrand(text) {
   const lo = text.toLowerCase();
   return BRANDS.slice().sort((a,b) => b.length - a.length)
     .find(b => lo.includes(b.toLowerCase())) || null;
+}
+function normalizeBrand(brand) {
+  return BRAND_ALIASES[brand?.toLowerCase?.()] || brand;
+}
+function displayCategory(category) {
+  return category === '베이스/프라이머' ? '베이스' : category;
 }
 function detectCategory(text) {
   const lo = text.toLowerCase();
@@ -687,8 +753,29 @@ function detectShade(text) {
   return null;
 }
 function detectPrice(text) {
-  const m = text.match(/[\d,]+\s*원/);
-  return m ? m[0].trim() : null;
+  const m = text.match(/[\d,]+\s*원|(?:^|[\s/])원(?:\s|$)/);
+  return m ? m[0].replace(/[\/\s]/g, '').trim() : null;
+}
+function cleanProductName(candidate, brand, shade, price) {
+  let name = candidate;
+  try { name = name.replace(new RegExp(brand, 'gi'), ''); } catch {}
+  if (shade) name = name.replace(shade, '');
+  if (price) name = name.replace(price, '');
+  return name
+    .replace(/\d{1,2}(호|번)/, '')
+    .replace(/#\d+/, '')
+    .replace(/[|/\\,_.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function buildLineCandidates(lines) {
+  const candidates = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (i + 1 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1]);
+    if (i + 2 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1] + ' ' + lines[i+2]);
+    candidates.push(lines[i]);
+  }
+  return candidates;
 }
 
 function extractProductsFromOCR(ocrText) {
@@ -697,28 +784,20 @@ function extractProductsFromOCR(ocrText) {
   const seen = new Set();
 
   // 단일 줄 + 2줄 조합 + 3줄 조합 순으로 시도 (브랜드와 제품명이 다른 줄에 있는 경우 처리)
-  const candidates = [];
-  for (let i = 0; i < lines.length; i++) {
-    candidates.push(lines[i]);
-    if (i + 1 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1]);
-    if (i + 2 < lines.length) candidates.push(lines[i] + ' ' + lines[i+1] + ' ' + lines[i+2]);
-  }
+  const candidates = buildLineCandidates(lines);
 
   for (const candidate of candidates) {
     if (candidate.length > 150) continue;
-    const brand    = detectBrand(candidate);
-    if (!brand) continue;
+    const rawBrand = detectBrand(candidate);
+    if (!rawBrand) continue;
+    const brand    = normalizeBrand(rawBrand);
 
     const category = detectCategory(candidate);
     const shade    = detectShade(candidate);
     const price    = detectPrice(candidate);
-
-    let name = candidate;
-    try { name = name.replace(new RegExp(brand, 'gi'), ''); } catch {}
-    if (shade) name = name.replace(shade, '');
-    if (price) name = name.replace(price, '');
-    name = name.replace(/[|/\\,_.]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!name || name.length < 1) name = brand;
+    const name     = cleanProductName(candidate, rawBrand, shade, price);
+    if (!name || name.length < 2) continue;
+    if (name.toLowerCase() === rawBrand.toLowerCase()) continue;
 
     const key = `${brand.toLowerCase()}-${name.slice(0,20)}`;
     if (seen.has(key)) continue;
@@ -731,30 +810,25 @@ function extractProductsFromOCR(ocrText) {
 
 function extractProducts(description, transcript) {
   const combined = [description, transcript].filter(Boolean).join('\n');
-  const lines    = combined.split(/[\n。]+/);
+  const lines    = combined.split(/[\n。]+/).map(l => l.replace(/[✔✅☑◆▶•·\-*①②③④⑤⑥⑦⑧⑨⑩]/g,'').trim()).filter(Boolean);
   const results  = [];
   const seen     = new Set();
+  const candidates = buildLineCandidates(lines);
 
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/[✔✅☑◆▶•·\-*①②③④⑤⑥⑦⑧⑨⑩]/g,'').trim();
+  for (const line of candidates) {
     if (line.length < 4 || line.length > 200) continue;
 
-    const brand = detectBrand(line);
-    if (!brand) continue;
+    const rawBrand = detectBrand(line);
+    if (!rawBrand) continue;
+    const brand = normalizeBrand(rawBrand);
 
     const category = detectCategory(line);
     const shade    = detectShade(line);
     const price    = detectPrice(line);
-
-    // 브랜드·호수·가격 제거 후 제품명 추출
-    let name = line;
-    try { name = name.replace(new RegExp(brand, 'gi'), ''); } catch {}
-    if (shade) name = name.replace(shade, '');
-    if (price) name = name.replace(price, '');
-    name = name.replace(/\d{1,2}(호|번)/, '').replace(/#\d+/, '')
-               .replace(/[|/\\,_.]/g,' ').replace(/\s+/g,' ').trim();
+    const name     = cleanProductName(line, rawBrand, shade, price);
 
     if (!name || name.length < 2) continue;
+    if (name.toLowerCase() === rawBrand.toLowerCase()) continue;
 
     const key = `${brand.toLowerCase()}-${name}`;
     if (seen.has(key)) continue;
@@ -1071,7 +1145,7 @@ function buildPost(products, creatorInfo, hashtags) {
   }
   let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ ${creatorInfo} 메이크업 손민수\n`;
   for (const [cat, items] of Object.entries(byCategory)) {
-    out += `\n♡ ${cat}\n`;
+    out += `\n♡ ${displayCategory(cat)}\n`;
     for (const p of items) {
       const name  = [p.brand, p.name].filter(Boolean).join(' ');
       const shade = p.shade ? ` / ${p.shade}` : '';
@@ -1091,7 +1165,7 @@ function renderTable(products) {
   let html = `<table><thead><tr><th>카테고리</th><th>브랜드</th><th>제품명</th><th>호수/색상</th><th>가격</th></tr></thead><tbody>`;
   for (const p of products) {
     html += `<tr>
-      <td><span class="tag">${p.category}</span></td>
+      <td><span class="tag">${displayCategory(p.category)}</span></td>
       <td>${esc(p.brand||'—')}</td>
       <td>${esc(p.name)}</td>
       <td>${esc(p.shade||'—')}</td>
