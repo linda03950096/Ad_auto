@@ -5,9 +5,31 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const configPath = path.join(root, "instagram_sources.json");
-const queuePath  = path.join(root, "instagram_queue.json");
-const shouldPublish = process.argv.includes("--publish");
+const configPath      = path.join(root, "instagram_sources.json");
+const queuePath       = path.join(root, "instagram_queue.json");
+const brandCachePath  = path.join(root, "instagram_brands_cache.json");
+const shouldPublish   = process.argv.includes("--publish");
+
+// 하드코딩된 브랜드 매핑 (index.html과 동기화)
+const BUILT_IN_BRANDS = new Set([
+  'banilaco_official','clio_official','clio_cosmetics','peripera_official',
+  'etudeofficial','etudehouse','romandyou','romand_official','herabeauty_official',
+  'laneige_kr','laneige_official','innisfreeofficial','innisfree_official',
+  'espiox_official','holikaholika_official','vdl_cosmetics','luna_makeup_official',
+  'naming.cosmetic','hince_official','mude_official','fwee_makeup','aoucosmetics',
+  'dasique_official','wakemake_official','3ce_official','threeconcepteyes',
+  'missha.official','apieu_official','too_cool_for_school_official','thesaem.official',
+  'muzigae_mansion','glint__official','heartpercent','colorgram.official',
+  'alternativestereo','a.chicosmetics','lummir_makeup','riskybeauty_official',
+  'tooc_official','be_of_official','iam_amuse','moumou_official_','2an_official',
+  'yslbeauty','diormakeup','diorbeauty','chanel.beauty','narsissist','nars_cosmetics',
+  'maccosmeticskorea','maccosmetics','giorgioarmani_beauty','armanibeauty',
+  'bobbibrownkorea','charlottetilbury','lauramercier','makeupforever',
+  'shiseido','tomfordbeauty','givenchybeauty','valentino.beauty','hourglasscosmetics',
+]);
+
+// 크롤링 중 발견한 미등록 브랜드 캐시
+const brandCache = new Map();
 
 const nowIso = () => new Date().toISOString();
 
@@ -120,30 +142,80 @@ async function writeJson(file, data) {
   await fs.writeFile(file, JSON.stringify(data, null, 2) + "\n", "utf8");
 }
 
-// ── 팔로워 수 캐시 (프로필 방문, 세션 내 1회) ──────────────
+// ── 팔로워 수 + 브랜드명 캐시 (프로필 방문, 세션 내 1회) ──
 const followerCache = new Map();
-async function getFollowerCount(page, username) {
-  if (!username) return null;
+async function visitProfile(page, username) {
+  if (!username) return { followers: null, displayName: null };
   if (followerCache.has(username)) return followerCache.get(username);
   try {
     await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
-    const count = await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const text = document.body.innerText;
       const m = text.match(/(\d[\d,.]+[KkMm]?)\s*(?:followers?|팔로워)/i)
               || text.match(/팔로워\s*(\d[\d,.]+[KkMm]?)/i);
-      if (!m) return null;
-      let n = m[1].replace(/,/g, '');
-      if (/[Kk]$/i.test(n)) return Math.round(parseFloat(n) * 1000);
-      if (/[Mm]$/i.test(n)) return Math.round(parseFloat(n) * 1000000);
-      return parseInt(n, 10);
+      let followers = null;
+      if (m) {
+        let n = m[1].replace(/,/g, '');
+        if (/[Kk]$/i.test(n)) followers = Math.round(parseFloat(n) * 1000);
+        else if (/[Mm]$/i.test(n)) followers = Math.round(parseFloat(n) * 1000000);
+        else followers = parseInt(n, 10);
+      }
+      // 페이지 타이틀에서 표시 이름 추출: "모우모우 (@moumou_official_) • Instagram..."
+      const titleMatch = document.title.match(/^(.+?)\s*\(@/);
+      const displayName = titleMatch ? titleMatch[1].trim() : null;
+      return { followers, displayName };
     });
-    followerCache.set(username, count);
-    return count;
+    followerCache.set(username, result);
+    return result;
   } catch {
-    followerCache.set(username, null);
-    return null;
+    const result = { followers: null, displayName: null };
+    followerCache.set(username, result);
+    return result;
   }
+}
+async function getFollowerCount(page, username) {
+  return (await visitProfile(page, username)).followers;
+}
+
+// ── 미등록 브랜드 이름 자동 수집 ──────────────────────────
+async function loadBrandCache() {
+  const data = await readJson(brandCachePath, {});
+  for (const [k, v] of Object.entries(data)) brandCache.set(k.toLowerCase(), v);
+}
+async function saveBrandCache(config) {
+  const obj = Object.fromEntries(brandCache);
+  await writeJson(brandCachePath, obj);
+  for (const extraDir of (config.additionalQueuePaths || [])) {
+    try {
+      await writeJson(path.resolve(root, extraDir, "instagram_brands_cache.json"), obj);
+    } catch {}
+  }
+}
+async function autoDiscoverBrands(page, captions, config) {
+  await loadBrandCache();
+  const counts = new Map();
+  for (const cap of captions) {
+    for (const [, h] of (cap.matchAll(/@([\w.]+)/g) || [])) {
+      const handle = h.toLowerCase();
+      if (!BUILT_IN_BRANDS.has(handle) && !brandCache.has(handle))
+        counts.set(handle, (counts.get(handle) || 0) + 1);
+    }
+  }
+  const toLookup = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 25)
+    .map(([h]) => h);
+  if (!toLookup.length) return;
+  console.log(`\n브랜드명 자동 수집: ${toLookup.length}개 계정...`);
+  for (const handle of toLookup) {
+    const { displayName } = await visitProfile(page, handle);
+    if (displayName) {
+      brandCache.set(handle, displayName);
+      console.log(`  @${handle} → ${displayName}`);
+    }
+  }
+  await saveBrandCache(config);
 }
 
 // ── 포스트 상세 스크랩 ─────────────────────────────────────
@@ -287,6 +359,10 @@ async function main() {
       enrichCount++;
       await new Promise(r => setTimeout(r, 1500));
     }
+
+    // 2.5단계: 미등록 브랜드 이름 자동 수집
+    const allCaptions = [...existing.values()].map(i => i.caption || '');
+    await autoDiscoverBrands(page, allCaptions, config);
 
     // 3단계: 필터링
     for (const [key, item] of existing) {

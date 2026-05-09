@@ -918,6 +918,8 @@ const INSTA_ACCOUNT_BRANDS = {
   'tooc_official': '투크',
   'be_of_official': '비오브',
   'iam_amuse': '어뮤즈',
+  'moumou_official_': '모우모우',
+  '2an_official': '투안',
   // 해외 브랜드
   'yslbeauty': '입생로랑',
   'diormakeup': '디올',
@@ -2072,6 +2074,12 @@ function parseInstagramCaption(rawCaption) {
 async function loadInstaQueue() {
   const el = $id('instaContent');
   el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>큐 불러오는 중...</div></div>';
+
+  // 크롤러가 수집한 미등록 브랜드 캐시 병합
+  try {
+    const cr = await fetch(`./instagram_brands_cache.json?_=${Date.now()}`);
+    if (cr.ok) Object.assign(INSTA_ACCOUNT_BRANDS, await cr.json());
+  } catch {}
 
   try {
     const r    = await fetch(`./instagram_queue.json?_=${Date.now()}`);
