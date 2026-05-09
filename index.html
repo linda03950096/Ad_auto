@@ -381,20 +381,21 @@
 
     <!-- API 설정 -->
     <div class="card">
-      <div class="card-title">⚙️ API 설정</div>
-      <div class="field">
-        <label>Anthropic API Key</label>
-        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off" />
-        <p class="hint">🔒 브라우저 localStorage에만 저장됩니다. &nbsp;<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">키 발급 →</a></p>
-      </div>
-      <div class="field">
-        <div class="model-row">
-          <label for="modelSel">분석 모델</label>
-          <select id="modelSel">
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (빠름·저렴)</option>
-            <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (정확도↑)</option>
-          </select>
+      <div class="card-title">⚙️ API 설정 <span style="font-weight:400;font-size:.78rem;color:var(--muted)">— 모두 선택사항</span></div>
+      <div class="row2">
+        <div class="field">
+          <label>YouTube Data API Key <span style="color:var(--pink-dark)">(영상 설명란 분석용)</span></label>
+          <input type="password" id="ytApiKeyManual" placeholder="AIzaSy..." autocomplete="off" />
+          <p class="hint"><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → YouTube Data API v3 → 무료 발급</p>
         </div>
+        <div class="field">
+          <label>Gemini API Key <span style="color:var(--green)">(AI 보정용, 무료)</span></label>
+          <input type="password" id="geminiKey" placeholder="AIzaSy..." autocomplete="off" />
+          <p class="hint"><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> → 무료 발급 (하루 1500회)</p>
+        </div>
+      </div>
+      <div class="status info" style="margin-top:.5rem;font-size:.8rem">
+        💡 키 없이도 자막·설명란 키워드로 기본 분석됩니다. Gemini 키 추가 시 정확도가 높아져요.
       </div>
     </div>
 
@@ -469,13 +470,8 @@
         <button class="btn btn-trigger" id="triggerBtn" onclick="runBrowserAnalysis()">▶ 지금 분석 시작</button>
       </div>
 
-      <div class="field" style="margin-bottom:.6rem">
-        <label>YouTube Data API Key</label>
-        <input type="password" id="ytApiKey" placeholder="AIzaSy..." autocomplete="off" />
-      </div>
-      <p class="hint">
-        🔑 Anthropic 키는 <strong>✍️ 직접 분석</strong> 탭 설정값을 자동으로 사용합니다.<br>
-        YouTube 키 발급: <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → YouTube Data API v3 → 사용 설정 → 사용자 인증 정보 → API 키 생성
+      <p class="hint" style="margin-bottom:.3rem">
+        🔑 YouTube·Gemini 키는 <strong>✍️ 직접 분석</strong> 탭 상단 <strong>API 설정</strong>에서 입력하세요. 한 번만 입력하면 자동 저장됩니다.
       </p>
 
       <div id="triggerStatus"></div>
@@ -491,9 +487,8 @@
 // ══════════════════════════════════════════════════════════════
 //  SHARED CONSTANTS
 // ══════════════════════════════════════════════════════════════
-const CLAUDE_URL   = 'https://api.anthropic.com/v1/messages';
-const PROXY1       = 'https://corsproxy.io/?';
-const PROXY2       = 'https://api.allorigins.win/raw?url=';
+const PROXY1 = 'https://corsproxy.io/?';
+const PROXY2 = 'https://api.allorigins.win/raw?url=';
 
 // ══════════════════════════════════════════════════════════════
 //  INIT — restore saved settings
@@ -502,15 +497,205 @@ const $id  = id => document.getElementById(id);
 const save = (k,v) => localStorage.setItem(k,v);
 const load = k    => localStorage.getItem(k) || '';
 
-$id('apiKey').value   = load('_mss_apikey');
-$id('modelSel').value = load('_mss_model') || 'claude-sonnet-4-6';
+// 저장된 키 복원
+$id('ytApiKeyManual').value = load('_mss_ytkey');
+$id('geminiKey').value      = load('_mss_geminikey');
 
-$id('apiKey').addEventListener('input',  e => save('_mss_apikey', e.target.value));
-$id('modelSel').addEventListener('change', e => save('_mss_model', e.target.value));
+$id('ytApiKeyManual').addEventListener('input', e => save('_mss_ytkey',      e.target.value));
+$id('geminiKey').addEventListener('input',      e => save('_mss_geminikey',  e.target.value));
 
 $id('youtubeUrl').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
 
 let lastTranscript = '';
+
+// ══════════════════════════════════════════════════════════════
+//  브랜드 DB & 카테고리 키워드
+// ══════════════════════════════════════════════════════════════
+const BRANDS = [
+  // 국내
+  '롬앤','rom&nd','3CE','쓰리컨셉아이즈',
+  '클리오','에뛰드','이니스프리','innisfree','라네즈','laneige',
+  '헤라','설화수','숨37','아모레퍼시픽','미샤','missha',
+  '토니모리','홀리카홀리카','페리페라','peripera',
+  '조선미녀','토리든','닥터지','달바','아누아','코스알엑스','cosrx',
+  '더페이스샵','네이처리퍼블릭','스킨푸드','바닐라코','어퓨',
+  '에스쁘아','espoir','투쿨포스쿨','웨이크메이크','wakemake',
+  '데이지크','dasique','아임미미','가히','kahi',
+  '메디힐','닥터자르트','마녀공장','라운드랩','파파레서피',
+  '비디비치','vdl','오페라','opera','글린트','필리밀리',
+  // 해외
+  '맥','mac','샤넬','chanel','디올','dior','나스','nars',
+  '랑콤','lancome','이브생로랑','ysl','조르지오아르마니','armani',
+  '샬롯틸버리','charlotte tilbury','메이크업포에버','mufe',
+  '베네피트','benefit','어반디케이','urban decay','투페이스드','타르트','tarte',
+  '모르피','morphe','nyx','닉스','메이블린','maybelline',
+  '로레알','loreal','케이트','kate','캔메이크','canmake','세자느','cezanne',
+];
+
+const CATEGORY_KW = {
+  '파운데이션':'파운데이션', 'foundation':'파운데이션',
+  '쿠션':'쿠션', 'cushion':'쿠션',
+  '컨실러':'컨실러', 'concealer':'컨실러',
+  '프라이머':'베이스/프라이머', 'primer':'베이스/프라이머', '베이스':'베이스/프라이머',
+  '세팅파우더':'세팅파우더/픽서', '파우더':'세팅파우더/픽서', '픽서':'세팅파우더/픽서',
+  '세팅스프레이':'세팅파우더/픽서',
+  '블러셔':'블러셔', '블러쉬':'블러셔', '치크':'블러셔', 'blush':'블러셔',
+  '하이라이터':'하이라이터', 'highlighter':'하이라이터',
+  '컨투어':'컨투어/쉐딩', '쉐딩':'컨투어/쉐딩', '쉐이딩':'컨투어/쉐딩',
+  '아이브로우':'아이브로우', '브로우':'아이브로우', '눈썹':'아이브로우', 'brow':'아이브로우',
+  '아이섀도우':'아이섀도우', '섀도우':'아이섀도우', '팔레트':'아이섀도우', 'shadow':'아이섀도우', 'eyeshadow':'아이섀도우',
+  '아이라이너':'아이라이너', '라이너':'아이라이너', 'liner':'아이라이너', 'eyeliner':'아이라이너',
+  '마스카라':'마스카라', 'mascara':'마스카라',
+  '틴트':'립', '립틴트':'립', '립스틱':'립', '립글로스':'립', '립밤':'립',
+  'tint':'립', 'lipstick':'립', 'lip':'립',
+};
+
+const IDOL_KEYWORDS = [
+  '아이브','뉴진스','에스파','블랙핑크','트와이스','세븐틴','르세라핌',
+  'IVE','NewJeans','aespa','BLACKPINK','TWICE','LESSERAFIM',
+  '아이유','선미','화사','청하','이효리',
+];
+
+// ── 추출 헬퍼 ──────────────────────────────────────────────
+function detectBrand(text) {
+  const lo = text.toLowerCase();
+  return BRANDS.slice().sort((a,b) => b.length - a.length)
+    .find(b => lo.includes(b.toLowerCase())) || null;
+}
+function detectCategory(text) {
+  const lo = text.toLowerCase();
+  for (const [kw, cat] of Object.entries(CATEGORY_KW)) {
+    if (lo.includes(kw)) return cat;
+  }
+  return '기타';
+}
+function detectShade(text) {
+  const patterns = [
+    /\b[Nn]\s*\d{1,2}[A-Za-z]?\b/, /\bW\d{2}\b/, /\bC\d{2}\b/,
+    /#\s*\d{1,3}\b/, /\b\d{1,2}\s*호\b/, /\b\d{1,2}\s*번\b/,
+    /\b[A-Z]{1,3}\d{2,3}\b/, /\b\d{2,3}[A-Z]\b/,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+function detectPrice(text) {
+  const m = text.match(/[\d,]+\s*원/);
+  return m ? m[0].trim() : null;
+}
+
+function extractProducts(description, transcript) {
+  const combined = [description, transcript].filter(Boolean).join('\n');
+  const lines    = combined.split(/[\n。]+/);
+  const results  = [];
+  const seen     = new Set();
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/[✔✅☑◆▶•·\-*①②③④⑤⑥⑦⑧⑨⑩]/g,'').trim();
+    if (line.length < 4 || line.length > 200) continue;
+
+    const brand = detectBrand(line);
+    if (!brand) continue;
+
+    const category = detectCategory(line);
+    const shade    = detectShade(line);
+    const price    = detectPrice(line);
+
+    // 브랜드·호수·가격 제거 후 제품명 추출
+    let name = line;
+    try { name = name.replace(new RegExp(brand, 'gi'), ''); } catch {}
+    if (shade) name = name.replace(shade, '');
+    if (price) name = name.replace(price, '');
+    name = name.replace(/\d{1,2}(호|번)/, '').replace(/#\d+/, '')
+               .replace(/[|/\\,_.]/g,' ').replace(/\s+/g,' ').trim();
+
+    if (!name || name.length < 2) continue;
+
+    const key = `${brand.toLowerCase()}-${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    results.push({ category, brand, name, shade: shade||null, price: price||null });
+  }
+  return results;
+}
+
+function generateHashtags(title, channel, products) {
+  const tags = new Set(['#메이크업','#손민수','#뷰티','#makeup','#beauty','#메이크업추천']);
+
+  // 카테고리별
+  const catMap = {
+    '립':['#립메이크업','#립틴트'], '아이섀도우':['#아이메이크업'],
+    '파운데이션':['#베이스메이크업'], '쿠션':['#쿠션메이크업'],
+    '블러셔':['#블러셔'], '아이라이너':['#아이라이너'],
+  };
+  products.forEach(p => (catMap[p.category]||[]).forEach(t => tags.add(t)));
+
+  // 아이돌/셀럽
+  const src = (title + channel).replace(/\s/g,'');
+  IDOL_KEYWORDS.forEach(k => { if (src.includes(k)) { tags.add(`#${k}`); tags.add('#아이돌메이크업'); }});
+
+  // 브랜드 태그
+  const branded = ['롬앤','3CE','클리오','에뛰드','이니스프리','헤라','라네즈','맥','샤넬','디올','나스'];
+  products.forEach(p => { if (branded.includes(p.brand)) tags.add(`#${p.brand}`); });
+
+  return [...tags].slice(0, 12);
+}
+
+// ── Gemini API (무료) ──────────────────────────────────────
+async function analyzeWithGemini(text, title, channel, geminiKey) {
+  const prompt = `다음은 유튜브 메이크업 영상 정보입니다.
+
+제목: ${title}
+채널: ${channel}
+내용:
+${text.slice(0,8000)}
+
+영상에서 언급된 메이크업 제품을 추출하고 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+
+{
+  "products": [{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"호수(없으면 null)","price":"가격(없으면 null)"}],
+  "hashtags": ["#해시태그"]
+}
+
+카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
+규칙: 실제 언급 제품만, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력`;
+
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }], generationConfig:{ temperature:0.2 } }),
+    }
+  );
+  if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || `Gemini API 오류 (${r.status})`); }
+  const data = await r.json();
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const m    = raw.match(/\{[\s\S]*\}/);
+  return m ? JSON.parse(m[0]) : { products:[], hashtags:[] };
+}
+
+// ── 스마트 분석 (키워드 → Gemini 순) ─────────────────────
+async function smartAnalyze(description, transcript, title, channel) {
+  const combined = [description, transcript].filter(Boolean).join('\n');
+
+  // 1단계: 키워드 추출
+  const products  = extractProducts(description, transcript);
+  const hashtags  = generateHashtags(title, channel, products);
+
+  if (products.length >= 2) return { products, hashtags };   // 충분하면 Gemini 불필요
+
+  // 2단계: Gemini로 보정
+  const geminiKey = load('_mss_geminikey');
+  if (geminiKey && combined.length > 20) {
+    try { return await analyzeWithGemini(combined, title, channel, geminiKey); } catch {}
+  }
+
+  return { products, hashtags };  // 그래도 없으면 있는 것만 반환
+}
 
 // ══════════════════════════════════════════════════════════════
 //  TAB SWITCHER
@@ -735,66 +920,6 @@ async function fetchTranscript(videoId) {
   return null;
 }
 
-async function analyzeWithClaude(transcript, creatorInfo) {
-  const apiKey = $id('apiKey').value.trim();
-  if (!apiKey) throw new Error('Anthropic API 키를 입력해주세요.');
-
-  const content = transcript || '(자막 없음)';
-  const prompt  = `다음은 유튜브 메이크업 영상의 자막/내용입니다.
-
-크리에이터: ${creatorInfo}
-
-자막:
-${content.slice(0,9000)}
-
-영상에서 언급된 메이크업 제품을 모두 추출하고 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
-
-{
-  "products": [
-    {
-      "category": "카테고리",
-      "brand": "브랜드명",
-      "name": "제품명",
-      "shade": "호수·색상명 (없으면 null)",
-      "price": "가격 (없으면 null)"
-    }
-  ],
-  "hashtags": ["#해시태그1"]
-}
-
-카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
-
-규칙:
-- 실제 언급된 제품만 추출 (추측 금지)
-- 해시태그 6-12개, #메이크업 #손민수 포함
-- JSON만 출력`;
-
-  const r = await fetch(CLAUDE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: $id('modelSel').value,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!r.ok) {
-    const e = await r.json().catch(()=>({}));
-    throw new Error(e.error?.message || `API 오류 (${r.status})`);
-  }
-
-  const data = await r.json();
-  const raw  = data.content?.[0]?.text || '';
-  const m    = raw.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('Claude 응답 파싱 실패: ' + raw.slice(0,120));
-  return JSON.parse(m[0]);
-}
 
 function buildPost(products, creatorInfo, hashtags) {
   const byCategory = {};
@@ -848,7 +973,9 @@ async function runAnalysis() {
   setStatus('');
 
   try {
-    let transcript  = manualText;
+    let transcript = manualText;
+    let description = '';
+    let title = '', channel = '';
     const creatorInfo = [groupName, creatorName].filter(Boolean).join(' ') || '크리에이터';
 
     if (urlVal) {
@@ -858,29 +985,41 @@ async function runAnalysis() {
       spin('영상 정보 가져오는 중...');
       const info = await fetchVideoInfo(vid);
       if (info) {
+        title   = info.title;
+        channel = info.author_name;
         $id('videoPreview').style.display = 'flex';
         $id('videoPreview').innerHTML = `
           <img src="${info.thumbnail_url}" alt="썸네일" onerror="this.style.display='none'">
           <div class="vi"><h3>${esc(info.title)}</h3><p>${esc(info.author_name)}</p></div>`;
       }
 
+      // 영상 설명란 가져오기 (YouTube API 키 있으면)
+      const ytKey = load('_mss_ytkey');
+      if (ytKey) {
+        try {
+          spin('영상 설명란 분석 중...');
+          const details = await getYouTubeDetails(ytKey, [vid]);
+          description = details[0]?.snippet?.description || '';
+        } catch { /* 없으면 그냥 진행 */ }
+      }
+
       if (!transcript) {
-        spin('자막 추출 중 (한국어 → 영어 → 자동생성 순)...');
+        spin('자막 추출 중...');
         transcript = await fetchTranscript(vid);
-        if (!transcript) {
+        if (transcript) $id('manualTranscript').value = transcript;
+        else {
           setStatus('⚠️ 자막 자동 추출 실패 — 아래 "자막 직접 붙여넣기"를 펼쳐 내용을 붙여넣은 후 다시 눌러주세요.','err');
           $id('transcriptDetails').open = true;
           return;
         }
-        $id('manualTranscript').value = transcript;
       }
     }
 
-    if (!transcript) { setStatus('분석할 내용이 없습니다.','err'); return; }
+    if (!transcript && !description) { setStatus('분석할 내용이 없습니다.','err'); return; }
     lastTranscript = transcript;
 
-    spin('Claude AI가 메이크업 제품 분석 중...');
-    const result = await analyzeWithClaude(transcript, creatorInfo);
+    spin('메이크업 제품 분석 중...');
+    const result   = await smartAnalyze(description, transcript, title, creatorInfo);
     const products = result.products || [];
     const hashtags = result.hashtags || [];
 
@@ -888,7 +1027,9 @@ async function runAnalysis() {
     $id('outputText').value = buildPost(products, creatorInfo, hashtags);
     $id('resultSection').style.display = 'block';
     $id('resultSection').scrollIntoView({ behavior:'smooth', block:'start' });
-    setStatus(`✅ 완료! 제품 ${products.length}개 추출됨.`, 'ok');
+
+    const method = load('_mss_geminikey') ? 'Gemini AI' : '키워드 분석';
+    setStatus(`✅ 완료! 제품 ${products.length}개 추출됨 (${method}).`, 'ok');
 
   } catch (err) {
     setStatus(`❌ ${esc(err.message)}`, 'err');
@@ -919,8 +1060,6 @@ function resetAll() {
 //  브라우저 직접 분석 (YouTube API + Claude API)
 // ══════════════════════════════════════════════════════════════
 
-$id('ytApiKey').value = load('_mss_ytkey');
-$id('ytApiKey').addEventListener('input', e => save('_mss_ytkey', e.target.value));
 
 function setTriggerStatus(html, type = 'info') {
   const el = $id('triggerStatus');
@@ -938,11 +1077,8 @@ async function runBrowserAnalysis() {
   setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>준비 중...</div>');
 
   try {
-    const ytKey     = $id('ytApiKey').value.trim();
-    const claudeKey = load('_mss_apikey');
-
-    if (!ytKey)     throw new Error('YouTube Data API 키를 입력해주세요.');
-    if (!claudeKey) throw new Error('Anthropic API 키가 없습니다. 위쪽 ✍️ 직접 분석 탭을 열어서 먼저 입력해주세요.');
+    const ytKey = load('_mss_ytkey');
+    if (!ytKey) throw new Error('YouTube API 키가 없습니다. ✍️ 직접 분석 탭 → API 설정에서 YouTube Data API Key를 먼저 입력해주세요.');
 
   try {
     // 1단계: 유튜브 검색 (오늘 → 7일 → 30일 순으로 확장)
@@ -977,9 +1113,10 @@ async function runBrowserAnalysis() {
          <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`
       );
 
-      const transcript = await fetchTranscript(vid);
-      const analysis   = await analyzeRaw(transcript, title, channel, claudeKey);
-      const post       = buildPost(analysis.products || [], channel, analysis.hashtags || []);
+      const transcript  = await fetchTranscript(vid);
+      const description = item.snippet?.description || '';
+      const analysis    = await smartAnalyze(description, transcript, title, channel);
+      const post        = buildPost(analysis.products || [], channel, analysis.hashtags || []);
 
       results.push({
         videoId:          vid,
@@ -1074,46 +1211,6 @@ function scoreVideo(item) {
   return (views + likes * 10) * (1 + recency);
 }
 
-async function analyzeRaw(transcript, title, channel, apiKey) {
-  const content = transcript || `영상 제목: ${title}\n채널: ${channel}`;
-  const prompt  = `다음은 유튜브 메이크업 영상 정보입니다.
-
-제목: ${title}
-채널: ${channel}
-내용:
-${content.slice(0, 9000)}
-
-영상에서 언급된 메이크업 제품을 추출하고 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
-
-{
-  "products": [{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"호수(없으면 null)","price":"가격(없으면 null)"}],
-  "hashtags": ["#해시태그"]
-}
-
-카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
-규칙: 실제 언급 제품만, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력`;
-
-  const r = await fetch(CLAUDE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model:      load('_mss_model') || 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      messages:   [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `Claude API 오류 (${r.status})`); }
-  const data = await r.json();
-  const raw  = data.content?.[0]?.text || '';
-  const m    = raw.match(/\{[\s\S]*\}/);
-  return m ? JSON.parse(m[0]) : { products: [], hashtags: [] };
-}
 
 // ══════════════════════════════════════════════════════════════
 //  UTILS
