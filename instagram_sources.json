@@ -1,16 +1,26 @@
 {
   "chromeProfileDir": ".instagram-profile",
   "headless": false,
-  "scrollsPerSource": 6,
+  "scrollsPerSource": 12,
   "publishToGit": false,
-  "minLikes": 500,
-  "minAgeHours": 24,
-  "bigAccountMinFollowers": 50000,
+  "minLikes": 300,
+  "bigAccountMinFollowers": 30000,
+  "dailyPickCount": 15,
   "sources": [
     {
       "label": "저장한 게시물",
       "url": "https://www.instagram.com/saved/all-posts/",
       "sourceType": "saved"
+    },
+    {
+      "label": "#아이돌메이크업",
+      "url": "https://www.instagram.com/explore/tags/아이돌메이크업/",
+      "sourceType": "hashtag"
+    },
+    {
+      "label": "#손민수메이크업",
+      "url": "https://www.instagram.com/explore/tags/손민수메이크업/",
+      "sourceType": "hashtag"
     },
     {
       "label": "#메이크업",
@@ -33,13 +43,13 @@
       "sourceType": "hashtag"
     },
     {
-      "label": "#아이돌메이크업",
-      "url": "https://www.instagram.com/explore/tags/아이돌메이크업/",
+      "label": "#뷰티스타그램",
+      "url": "https://www.instagram.com/explore/tags/뷰티스타그램/",
       "sourceType": "hashtag"
     },
     {
-      "label": "#손민수메이크업",
-      "url": "https://www.instagram.com/explore/tags/손민수메이크업/",
+      "label": "#koreanmakeup",
+      "url": "https://www.instagram.com/explore/tags/koreanmakeup/",
       "sourceType": "hashtag"
     }
   ],

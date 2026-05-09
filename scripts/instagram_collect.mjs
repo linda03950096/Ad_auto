@@ -47,9 +47,36 @@ function isAdPost(caption) {
   const lo = caption.toLowerCase();
   return AD_KEYWORDS.some(kw => lo.includes(kw.toLowerCase()));
 }
-function isOlderThan24h(postedAt) {
-  if (!postedAt) return true; // 날짜 모르면 통과
-  return (Date.now() - new Date(postedAt).getTime()) >= 24 * 60 * 60 * 1000;
+
+// "카테고리 @brand 컬러" 구조가 명확히 있는 게시물 — 최우선 보존 대상
+const STRUCT_CAT_KW = ['섀도우','블러셔','하이라이터','립','치크','틴트','아이라이너','마스카라','파운데이션','쿠션','컨실러'];
+function hasStructuredProductList(caption) {
+  if (!caption) return false;
+  return caption.split('\n').some(line => {
+    const lo = line.toLowerCase().trim();
+    return STRUCT_CAT_KW.some(kw => lo.startsWith(kw)) && /@[\w.]+/.test(line);
+  });
+}
+
+const IDOL_KW = [
+  '아이브','뉴진스','에스파','블랙핑크','트와이스','세븐틴','르세라핌',
+  'ive','newjeans','aespa','blackpink','twice','lesserafim',
+  '아이유','선미','화사','청하','이효리',
+];
+function isIdolPost(item) {
+  const text = (item.caption || '').toLowerCase();
+  return IDOL_KW.some(k => text.includes(k));
+}
+
+// 게시물 우선순위 점수 (높을수록 상단)
+function scorePost(item) {
+  const cap = item.caption || '';
+  let score = 0;
+  if (isIdolPost(item))              score += 10000; // 아이돌 최우선
+  if (hasStructuredProductList(cap)) score += 3000;  // 구조화 제품 리스트
+  if (hasProductInfo(cap))           score += 500;
+  score += Math.min(item.likes || 0, 5000);          // 좋아요 (최대 5000점)
+  return score;
 }
 function parseLikeCount(text) {
   if (!text) return null;
@@ -206,9 +233,9 @@ async function main() {
   const config = await readJson(configPath, null);
   if (!config?.sources?.length) throw new Error(`No sources in ${configPath}`);
 
-  const MIN_LIKES       = config.minLikes       ?? 500;
-  const BIG_ACCOUNT_THR = config.bigAccountMinFollowers ?? 50000;
-  const MIN_AGE_HOURS   = config.minAgeHours    ?? 24;
+  const MIN_LIKES        = config.minLikes              ?? 500;
+  const BIG_ACCOUNT_THR  = config.bigAccountMinFollowers ?? 50000;
+  const DAILY_PICK_COUNT = config.dailyPickCount         ?? 15;
 
   let pw;
   try { pw = await import("playwright"); }
@@ -281,10 +308,16 @@ async function main() {
         continue;
       }
 
-      // hashtag 소스: 엄격한 필터
+      // hashtag 소스: 제품 정보 없으면 제외
       if (!hasProductInfo(item.caption)) {
         console.log(`  ❌ 제품 없음: ${item.url}`);
         existing.delete(key); continue;
+      }
+
+      // 구조화 제품 리스트("카테고리 @brand 컬러") → 좋아요 무관 통과
+      if (hasStructuredProductList(item.caption)) {
+        console.log(`  ✅ 구조화 제품리스트: ${item.url}`);
+        continue;
       }
 
       // 좋아요 500 미만이면 → 팔로워 수 확인해서 대형 계정이면 통과
@@ -301,25 +334,26 @@ async function main() {
     await context.close();
   }
 
-  const IDOL_KW = [
-    '아이브','뉴진스','에스파','블랙핑크','트와이스','세븐틴','르세라핌',
-    'ive','newjeans','aespa','blackpink','twice','lesserafim',
-    '아이유','선미','화사','청하','이효리',
-  ];
-  function isIdolPost(item) {
-    const text = (item.caption || '').toLowerCase();
-    return IDOL_KW.some(k => text.includes(k.toLowerCase()));
+  // 점수 기반 정렬: 아이돌 > 구조화 제품리스트 > 좋아요
+  const sorted = [...existing.values()].sort((a, b) => scorePost(b) - scorePost(a));
+
+  // 오늘 수집된 항목 중 상위 DAILY_PICK_COUNT개를 todayPick으로 태깅
+  const todayCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let pickCount = 0;
+  for (const item of sorted) {
+    const isToday = (item.collectedAt || '') >= todayCutoff;
+    item.todayPick = isToday && pickCount < DAILY_PICK_COUNT;
+    if (item.todayPick) pickCount++;
   }
 
-  const items = [...existing.values()]
-    .sort((a, b) => {
-      const ai = isIdolPost(a) ? 0 : 1;
-      const bi = isIdolPost(b) ? 0 : 1;
-      if (ai !== bi) return ai - bi;
-      return String(b.collectedAt || "").localeCompare(String(a.collectedAt || ""));
-    });
+  // todayPick을 맨 앞으로
+  const items = [
+    ...sorted.filter(i => i.todayPick),
+    ...sorted.filter(i => !i.todayPick),
+  ];
+
   await writeJson(queuePath, { generatedAt: nowIso(), items });
-  console.log(`Done. Queue size: ${items.length}`);
+  console.log(`Done. Queue: ${items.length}개 (오늘 픽 ${pickCount}개)`);
 
   if (shouldPublish || config.publishToGit) {
     const s = publishQueue();
