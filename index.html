@@ -1510,32 +1510,33 @@ async function runImageAnalysis() {
       corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
     });
 
-    const texts = [];
+    const imageAnalyses = [];
     for (let i = 0; i < uploadedImages.length; i++) {
       setImgStatus(`<div class="spin-wrap"><div class="spinner"></div>(${i+1}/${uploadedImages.length}) 이미지 텍스트 읽는 중...</div>`);
       const { data: { text } } = await worker.recognize(uploadedImages[i].dataUrl);
-      texts.push(text);
+      imageAnalyses.push({ text, product: extractProductsFromOCR(text)[0] || null });
     }
     await worker.terminate();
 
-    const ocrText = texts.join('\n');
-
-    // 2단계: 키워드 매칭으로 제품 추출 (여러 줄 조합 인식 포함)
+    // 2단계: 사진 1장당 제품 1개만 추출
     setImgStatus('<div class="spin-wrap"><div class="spinner"></div>제품 정보 분석 중...</div>');
-    let products = extractProductsFromOCR(ocrText);
+    let products = imageAnalyses.map(item => item.product).filter(Boolean);
     let hashtags = generateHashtags('', creatorInfo, products);
 
-    // 3단계: Gemini 키 있으면 AI 보정 시도
+    // 3단계: Gemini 키 있으면 비어 있는 사진만 사진 단위로 보정 시도
     const geminiKey = load('_mss_geminikey');
-    if (geminiKey && products.length < 2) {
-      try {
-        setImgStatus('<div class="spin-wrap"><div class="spinner"></div>AI로 추가 분석 중...</div>');
-        const geminiResult = await analyzeWithGemini(ocrText, '', creatorInfo, geminiKey);
-        if (geminiResult.products?.length > products.length) {
-          products = geminiResult.products;
-          hashtags = geminiResult.hashtags || hashtags;
-        }
-      } catch { /* Gemini 실패 시 OCR 결과만 사용 */ }
+    if (geminiKey && products.length < uploadedImages.length) {
+      setImgStatus('<div class="spin-wrap"><div class="spinner"></div>AI로 추가 분석 중...</div>');
+      for (let i = 0; i < imageAnalyses.length; i++) {
+        if (imageAnalyses[i].product || !imageAnalyses[i].text.trim()) continue;
+        try {
+          const geminiResult = await analyzeWithGemini(imageAnalyses[i].text, '', creatorInfo, geminiKey);
+          const product = geminiResult.products?.[0];
+          if (product) imageAnalyses[i].product = product;
+        } catch { /* Gemini 실패 시 해당 사진은 건너뜀 */ }
+      }
+      products = imageAnalyses.map(item => item.product).filter(Boolean);
+      hashtags = generateHashtags('', creatorInfo, products);
     }
 
     renderTable(products);
