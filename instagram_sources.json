@@ -3,10 +3,35 @@
   "headless": false,
   "scrollsPerSource": 6,
   "publishToGit": false,
+  "minLikes": 500,
+  "minAgeHours": 24,
+  "bigAccountMinFollowers": 50000,
   "sources": [
     {
       "label": "저장한 게시물",
-      "url": "https://www.instagram.com/saved/all-posts/"
+      "url": "https://www.instagram.com/saved/all-posts/",
+      "sourceType": "saved"
+    },
+    {
+      "label": "#메이크업",
+      "url": "https://www.instagram.com/explore/tags/메이크업/",
+      "sourceType": "hashtag"
+    },
+    {
+      "label": "#뷰티",
+      "url": "https://www.instagram.com/explore/tags/뷰티/",
+      "sourceType": "hashtag"
+    },
+    {
+      "label": "#makeup",
+      "url": "https://www.instagram.com/explore/tags/makeup/",
+      "sourceType": "hashtag"
+    },
+    {
+      "label": "#메이크업추천",
+      "url": "https://www.instagram.com/explore/tags/메이크업추천/",
+      "sourceType": "hashtag"
     }
-  ]
+  ],
+  "accounts": []
 }
