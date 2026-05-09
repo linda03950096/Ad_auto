@@ -923,20 +923,26 @@ $id('ytApiKey').value = load('_mss_ytkey');
 $id('ytApiKey').addEventListener('input', e => save('_mss_ytkey', e.target.value));
 
 function setTriggerStatus(html, type = 'info') {
-  $id('triggerStatus').innerHTML = html
-    ? `<div class="status ${type}">${html}</div>` : '';
+  const el = $id('triggerStatus');
+  if (!el) return;
+  el.innerHTML = html ? `<div class="status ${type}">${html}</div>` : '';
+  if (html) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function runBrowserAnalysis() {
-  const ytKey    = $id('ytApiKey').value.trim();
-  const claudeKey = load('_mss_apikey');
-  const btn      = $id('triggerBtn');
+  const btn = $id('triggerBtn');
 
-  if (!ytKey)     { setTriggerStatus('❌ YouTube Data API 키를 입력해주세요.', 'err'); return; }
-  if (!claudeKey) { setTriggerStatus('❌ Anthropic API 키가 없습니다. <strong>✍️ 직접 분석</strong> 탭에서 먼저 입력해주세요.', 'err'); return; }
-
+  // 버튼 즉시 비활성화 + 상태 표시 (맨 먼저 실행)
   btn.disabled = true;
   btn.textContent = '⏳ 분석 중...';
+  setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>준비 중...</div>');
+
+  try {
+    const ytKey     = $id('ytApiKey').value.trim();
+    const claudeKey = load('_mss_apikey');
+
+    if (!ytKey)     throw new Error('YouTube Data API 키를 입력해주세요.');
+    if (!claudeKey) throw new Error('Anthropic API 키가 없습니다. 위쪽 ✍️ 직접 분석 탭을 열어서 먼저 입력해주세요.');
 
   try {
     // 1단계: 유튜브 검색 (오늘 → 7일 → 30일 순으로 확장)
