@@ -1393,7 +1393,9 @@ function renderInstagramQueue(data) {
         <span class="tag-mini">${label}</span>
       </div>
       <div class="ig-actions">
-        <a class="ig-link" href="${esc(item.url)}" target="_blank" rel="noopener">인스타에서 열기</a>
+        <a class="ig-link" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
+           onclick="event.preventDefault(); window.open(this.getAttribute('data-url'), '_blank');"
+           data-url="${esc(item.url)}">인스타에서 열기</a>
         <button class="btn btn-sm btn-reset" onclick="copyInstagramLink(${i})">링크 복사</button>
       </div>
       <input type="hidden" id="ig-url-${i}" value="${esc(item.url)}">
@@ -2145,7 +2147,8 @@ function renderInstaCard(item, i, isTodayPick = false) {
           ${ago ? `<span class="pick-stat">🕐 ${ago}</span>` : ''}
           ${products.length ? `<span class="pick-stat">🛍 제품 ${products.length}개</span>` : ''}
           ${item.likes ? `<span class="pick-stat">❤️ ${item.likes.toLocaleString()}</span>` : ''}
-          <a href="${esc(item.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
+          <a href="${esc(item.url)}" data-url="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
+             onclick="event.stopPropagation(); event.preventDefault(); window.open(this.getAttribute('data-url'), '_blank');"
              style="font-size:.75rem;color:var(--blue);text-decoration:none">▶ 인스타에서 보기</a>
         </div>
       </div>
