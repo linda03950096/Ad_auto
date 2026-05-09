@@ -287,12 +287,6 @@ async function main() {
         existing.delete(key); continue;
       }
 
-      // 24시간 이상 된 게시물만
-      if (!isOlderThan24h(item.postedAt)) {
-        console.log(`  ❌ 24h 미만: ${item.url}`);
-        existing.delete(key); continue;
-      }
-
       // 좋아요 500 미만이면 → 팔로워 수 확인해서 대형 계정이면 통과
       if (item.likes !== null && item.likes < MIN_LIKES) {
         const followers = await getFollowerCount(page, item.username);
@@ -307,8 +301,23 @@ async function main() {
     await context.close();
   }
 
+  const IDOL_KW = [
+    '아이브','뉴진스','에스파','블랙핑크','트와이스','세븐틴','르세라핌',
+    'ive','newjeans','aespa','blackpink','twice','lesserafim',
+    '아이유','선미','화사','청하','이효리',
+  ];
+  function isIdolPost(item) {
+    const text = (item.caption || '').toLowerCase();
+    return IDOL_KW.some(k => text.includes(k.toLowerCase()));
+  }
+
   const items = [...existing.values()]
-    .sort((a, b) => String(b.collectedAt || "").localeCompare(String(a.collectedAt || "")));
+    .sort((a, b) => {
+      const ai = isIdolPost(a) ? 0 : 1;
+      const bi = isIdolPost(b) ? 0 : 1;
+      if (ai !== bi) return ai - bi;
+      return String(b.collectedAt || "").localeCompare(String(a.collectedAt || ""));
+    });
   await writeJson(queuePath, { generatedAt: nowIso(), items });
   console.log(`Done. Queue size: ${items.length}`);
 
