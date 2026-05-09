@@ -401,6 +401,7 @@
   </style>
 <!-- GitHub Actions가 secrets에서 생성한 키 파일 (없으면 무시) -->
 <script src="keys.js" onerror="window.__KEYS=window.__KEYS||{}"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -478,7 +479,7 @@
       <div class="card-title">📸 캡쳐 이미지로 분석</div>
       <p class="hint" style="margin-bottom:1rem;line-height:1.6">
         영상 보면서 제품이 나오는 화면을 캡쳐해서 여기에 <strong>Ctrl+V</strong>로 붙여넣거나 파일을 올리면 자동 정리해드립니다.<br>
-        여러 장 한꺼번에 가능 · Gemini API 키 필요
+        여러 장 한꺼번에 가능 · API 키 없이 무료 사용 가능 (이미지에 제품명 텍스트가 보여야 잘 인식돼요)
       </p>
 
       <div class="row2" style="margin-bottom:1rem">
@@ -1375,47 +1376,58 @@ async function runImageAnalysis() {
 
   try {
     if (!uploadedImages.length) throw new Error('이미지를 먼저 추가해주세요. (Ctrl+V 붙여넣기 또는 클릭해서 파일 선택)');
-    const geminiKey = load('_mss_geminikey');
-    if (!geminiKey) throw new Error('Gemini API 키가 필요합니다. 위 API 설정에서 입력해주세요.');
-
-    setImgStatus('<div class="spin-wrap"><div class="spinner"></div>이미지 분석 중...</div>');
 
     const creatorName = $id('imgCreatorName').value.trim();
     const groupName   = $id('imgGroupName').value.trim();
     const creatorInfo = [groupName, creatorName].filter(Boolean).join(' ') || '크리에이터';
 
-    const parts = uploadedImages.map(img => ({
-      inline_data: { mime_type: img.mimeType, data: img.dataUrl.split(',')[1] }
-    }));
-    parts.push({ text: `위 이미지들은 메이크업 영상 캡쳐 사진입니다. 화면에 보이는 메이크업 제품명·브랜드를 찾아서 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+    // 1단계: OCR로 이미지에서 텍스트 추출
+    setImgStatus('<div class="spin-wrap"><div class="spinner"></div>이미지에서 텍스트 읽는 중... (이미지 수에 따라 30초~1분 소요)</div>');
+    const worker = await Tesseract.createWorker('kor+eng', 1, {
+      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+      corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
+    });
 
-{
-  "products": [{"category":"카테고리","brand":"브랜드명","name":"제품명","shade":"호수(없으면 null)","price":"가격(없으면 null)"}],
-  "hashtags": ["#해시태그"]
-}
+    const texts = [];
+    for (let i = 0; i < uploadedImages.length; i++) {
+      setImgStatus(`<div class="spin-wrap"><div class="spinner"></div>(${i+1}/${uploadedImages.length}) 이미지 텍스트 읽는 중...</div>`);
+      const { data: { text } } = await worker.recognize(uploadedImages[i].dataUrl);
+      texts.push(text);
+    }
+    await worker.terminate();
 
-카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
-규칙: 여러 이미지의 제품을 모두 합쳐서 중복 없이 정리, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력` });
+    const ocrText = texts.join('\n');
 
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ contents:[{parts}], generationConfig:{temperature:0.1} }) }
-    );
-    if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || `Gemini 오류 (${r.status})`); }
-    const data = await r.json();
-    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const m    = raw.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error('분析 결과를 읽을 수 없습니다. 이미지에 제품이 잘 보이는지 확인해주세요.');
-    const result   = JSON.parse(m[0]);
-    const products = result.products || [];
-    const hashtags = result.hashtags || [];
+    // 2단계: 키워드 매칭으로 제품 추출
+    setImgStatus('<div class="spin-wrap"><div class="spinner"></div>제품 정보 분석 중...</div>');
+    let products = extractProducts(ocrText, '');
+    let hashtags = generateHashtags('', creatorInfo, products);
+
+    // 3단계: Gemini 키 있으면 AI 보정 시도
+    const geminiKey = load('_mss_geminikey');
+    if (geminiKey && products.length < 2) {
+      try {
+        setImgStatus('<div class="spin-wrap"><div class="spinner"></div>AI로 추가 분석 중...</div>');
+        const geminiResult = await analyzeWithGemini(ocrText, '', creatorInfo, geminiKey);
+        if (geminiResult.products?.length > products.length) {
+          products = geminiResult.products;
+          hashtags = geminiResult.hashtags || hashtags;
+        }
+      } catch { /* Gemini 실패 시 OCR 결과만 사용 */ }
+    }
 
     renderTable(products);
     $id('outputText').value = buildPost(products, creatorInfo, hashtags);
     $id('resultSection').style.display = 'block';
     $id('resultSection').scrollIntoView({ behavior:'smooth', block:'start' });
-    setImgStatus(`✅ 완료! 제품 ${products.length}개 추출됐어요.`, 'ok');
+
+    const method = products.length ? 'OCR' : '';
+    setImgStatus(
+      products.length
+        ? `✅ 완료! 제품 ${products.length}개 추출됐어요. (OCR 방식 — 이미지에 제품명이 텍스트로 보여야 잘 인식돼요)`
+        : '⚠️ 제품을 찾지 못했어요. 제품명이 텍스트로 보이는 화면을 캡쳐해서 올려보세요.',
+      products.length ? 'ok' : 'warn'
+    );
 
   } catch (err) {
     setImgStatus(`❌ ${esc(err.message)}`, 'err');
