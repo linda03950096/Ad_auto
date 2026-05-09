@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "collect:instagram": "node scripts/instagram_collect.mjs",
+    "collect:instagram:publish": "node scripts/instagram_collect.mjs --publish"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1"
+  }
+}

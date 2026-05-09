@@ -1,0 +1,12 @@
+{
+  "chromeProfileDir": ".instagram-profile",
+  "headless": false,
+  "scrollsPerSource": 6,
+  "publishToGit": false,
+  "sources": [
+    {
+      "label": "저장한 게시물",
+      "url": "https://www.instagram.com/saved/all-posts/"
+    }
+  ]
+}

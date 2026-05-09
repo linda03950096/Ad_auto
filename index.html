@@ -287,6 +287,45 @@
       color: var(--pink-dark);
       margin: 0 0 .8rem;
     }
+    .ig-grid { display: grid; gap: .8rem; }
+    .ig-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      padding: 1rem;
+    }
+    .ig-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: .8rem;
+    }
+    .ig-title {
+      font-size: .92rem;
+      font-weight: 800;
+      word-break: break-word;
+    }
+    .ig-meta {
+      margin-top: .35rem;
+      font-size: .76rem;
+      color: var(--muted);
+      display: flex;
+      gap: .45rem;
+      flex-wrap: wrap;
+    }
+    .ig-actions {
+      display: flex;
+      gap: .45rem;
+      flex-wrap: wrap;
+      margin-top: .8rem;
+    }
+    .ig-link {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .ig-link:hover { text-decoration: underline; }
 
     /* toggle arrow */
     .pick-toggle { font-size: .8rem; color: var(--muted); flex-shrink: 0; align-self: center; transition: transform .2s; }
@@ -440,6 +479,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-btn-manual" onclick="switchTab('manual')">✍️ 직접 분석</button>
     <button class="tab-btn"        id="tab-btn-daily"  onclick="switchTab('daily')">📅 오늘의 추천</button>
+    <button class="tab-btn"        id="tab-btn-instagram" onclick="switchTab('instagram')">📥 인스타 수집함</button>
   </div>
 </header>
 
@@ -585,6 +625,21 @@
     <div id="dailyContent"></div>
 
   </div><!-- /tab-daily -->
+
+  <!-- ══ TAB: 인스타 수집함 ═════════════════════════════════════ -->
+  <div id="tab-instagram" style="display:none">
+
+    <div class="card">
+      <div class="card-title">📥 인스타 수집함</div>
+      <p style="font-size:.84rem;color:var(--muted);line-height:1.6;">
+        내 PC에서 백그라운드 수집기가 저장한 릴스·게시물을 확인하는 공간입니다.<br>
+        수집기는 <code>instagram_sources.json</code>에 적어둔 저장 목록이나 계정 페이지를 주기적으로 확인합니다.
+      </p>
+    </div>
+
+    <div id="instagramContent"></div>
+
+  </div><!-- /tab-instagram -->
 
 </div><!-- /wrap -->
 
@@ -947,11 +1002,12 @@ async function smartAnalyze(description, transcript, title, channel) {
 //  TAB SWITCHER
 // ══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  ['manual','daily'].forEach(t => {
+  ['manual','daily','instagram'].forEach(t => {
     $id(`tab-${t}`).style.display       = t === name ? '' : 'none';
     $id(`tab-btn-${t}`).classList.toggle('active', t === name);
   });
   if (name === 'daily') loadDailyPicks();
+  if (name === 'instagram') loadInstagramQueue();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1128,6 +1184,85 @@ function formatDuration(seconds) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INSTAGRAM QUEUE
+// ══════════════════════════════════════════════════════════════
+let instagramLoaded = false;
+
+async function loadInstagramQueue() {
+  if (instagramLoaded) return;
+  const el = $id('instagramContent');
+  el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>인스타 수집함 불러오는 중...</div></div>';
+
+  try {
+    const r = await fetch(`./instagram_queue.json?_=${Date.now()}`);
+    const data = await r.json();
+    instagramLoaded = true;
+    el.innerHTML = renderInstagramQueue(data);
+  } catch {
+    el.innerHTML = renderInstagramEmpty();
+  }
+}
+
+function renderInstagramEmpty() {
+  return `<div class="card">
+    <div class="empty-state">
+      <div class="big">📥</div>
+      <p>아직 수집된 인스타 항목이 없습니다.<br>
+      PC에서 <code>npm run collect:instagram</code> 또는 예약 작업을 실행하면 여기에 쌓입니다.</p>
+    </div>
+  </div>`;
+}
+
+function renderInstagramQueue(data) {
+  const items = data.items || [];
+  if (!items.length) return renderInstagramEmpty();
+
+  const newCount = items.filter(item => (item.status || 'new') === 'new').length;
+  const reelCount = items.filter(item => item.type === 'reel').length;
+  const postCount = items.filter(item => item.type === 'post').length;
+
+  let html = `<div class="card" style="padding:1rem 1.5rem">
+    <div class="picks-meta">
+      <span class="date-badge">📥 수집 ${items.length}개</span>
+      <span class="window-badge">새 항목 ${newCount} · 릴스 ${reelCount} · 게시물 ${postCount}</span>
+    </div>
+    <p class="hint">마지막 수집: ${data.generatedAt ? esc(new Date(data.generatedAt).toLocaleString('ko-KR')) : '아직 없음'}</p>
+  </div>
+  <div class="ig-grid">`;
+
+  items.forEach((item, i) => {
+    const label = item.type === 'reel' ? '릴스' : '게시물';
+    const source = item.sourceLabel || '인스타';
+    const collected = item.collectedAt ? timeAgo(item.collectedAt) : '';
+    html += `<div class="ig-card">
+      <div class="ig-top">
+        <div>
+          <div class="ig-title">${label} ${i + 1}</div>
+          <div class="ig-meta">
+            <span>${esc(source)}</span>
+            ${collected ? `<span>수집 ${collected}</span>` : ''}
+            <span>${esc(item.status || 'new')}</span>
+          </div>
+        </div>
+        <span class="tag-mini">${label}</span>
+      </div>
+      <div class="ig-actions">
+        <a class="ig-link" href="${esc(item.url)}" target="_blank" rel="noopener">인스타에서 열기</a>
+        <button class="btn btn-sm btn-reset" onclick="copyInstagramLink(${i})">링크 복사</button>
+      </div>
+      <input type="hidden" id="ig-url-${i}" value="${esc(item.url)}">
+    </div>`;
+  });
+
+  return html + '</div>';
+}
+
+function copyInstagramLink(i) {
+  const url = $id(`ig-url-${i}`).value;
+  navigator.clipboard.writeText(url);
 }
 
 // ══════════════════════════════════════════════════════════════
