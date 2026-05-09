@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💄 메이크업 손민수 자동 생성기</title>
+  <style>
+    :root {
+      --pink: #f4a0b5;
+      --pink-dark: #d9607e;
+      --purple: #c084fc;
+      --bg: #fff7fb;
+      --card: #ffffff;
+      --text: #2d2020;
+      --muted: #888;
+      --border: #f0d6e0;
+      --green: #2e9e6b;
+      --red: #d93025;
+      --blue: #2563eb;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #f4a0b5 0%, #c084fc 100%);
+      color: #fff;
+      text-align: center;
+      padding: 2rem 1rem 0;
+    }
+    header h1 { font-size: 1.7rem; font-weight: 800; }
+    header p  { margin-top: .35rem; opacity: .88; font-size: .92rem; padding-bottom: 1.4rem; }
+
+    /* ── TABS ── */
+    .tab-bar {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      border-bottom: none;
+      padding: 0 1rem;
+    }
+    .tab-btn {
+      padding: .7rem 2rem;
+      border: none;
+      border-radius: 12px 12px 0 0;
+      font-size: .95rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: rgba(255,255,255,.22);
+      color: rgba(255,255,255,.75);
+      transition: all .18s;
+      letter-spacing: .2px;
+    }
+    .tab-btn.active {
+      background: var(--bg);
+      color: var(--pink-dark);
+    }
+    .tab-btn:not(.active):hover { background: rgba(255,255,255,.35); color: #fff; }
+
+    /* ── LAYOUT ── */
+    .wrap { max-width: 780px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 1.5rem;
+      margin-bottom: 1.4rem;
+      box-shadow: 0 3px 12px rgba(244,160,181,.12);
+    }
+    .card-title {
+      font-size: .9rem;
+      font-weight: 700;
+      color: var(--pink-dark);
+      margin-bottom: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    /* ── FORM ── */
+    .field { margin-bottom: 1rem; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; }
+    input[type="text"],
+    input[type="url"],
+    input[type="password"],
+    textarea,
+    select {
+      width: 100%;
+      padding: .7rem 1rem;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: .95rem;
+      color: var(--text);
+      background: #fff;
+      font-family: inherit;
+      transition: border-color .18s;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--pink); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    textarea { resize: vertical; }
+    .hint { font-size: .76rem; color: var(--muted); margin-top: .35rem; }
+    .hint a { color: var(--pink-dark); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+      padding: .72rem 1.4rem; border: none; border-radius: 10px;
+      font-size: .95rem; font-weight: 700; cursor: pointer; transition: all .18s;
+    }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none !important; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: #fff; width: 100%; font-size: 1rem;
+    }
+    .btn-primary:not(:disabled):hover { opacity: .9; transform: translateY(-1px); }
+    .btn-sm  { font-size: .82rem; padding: .48rem 1rem; }
+    .btn-copy  { background: var(--green); color: #fff; }
+    .btn-reset { background: var(--border); color: var(--text); }
+    .btn-row   { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; flex-wrap: wrap; }
+
+    /* ── STATUS ── */
+    .status { padding: .7rem 1rem; border-radius: 9px; font-size: .88rem; margin-top: .9rem; }
+    .status.info { background: #eef4ff; color: var(--blue); }
+    .status.ok   { background: #edfaf2; color: var(--green); }
+    .status.err  { background: #fdecea; color: var(--red); }
+    .status.warn { background: #fff8e1; color: #b45309; }
+
+    /* ── SPINNER ── */
+    .spin-wrap { display: flex; align-items: center; gap: .55rem; }
+    .spinner {
+      width: 17px; height: 17px; flex-shrink: 0;
+      border: 2.5px solid var(--border); border-top-color: var(--pink);
+      border-radius: 50%; animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── MANUAL: VIDEO PREVIEW ── */
+    .video-preview {
+      display: flex; gap: 1rem; align-items: center;
+      background: #f9f4fb; border-radius: 10px; padding: .9rem; margin-top: 1rem;
+    }
+    .video-preview img  { width: 110px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+    .video-preview .vi  { min-width: 0; }
+    .video-preview .vi h3 { font-size: .9rem; font-weight: 700; line-height: 1.4; word-break: break-word; }
+    .video-preview .vi p  { font-size: .78rem; color: var(--muted); margin-top: .2rem; }
+
+    /* ── MANUAL: TRANSCRIPT ── */
+    details { margin-top: .8rem; }
+    details summary { font-size: .82rem; color: var(--pink-dark); cursor: pointer; font-weight: 600; user-select: none; list-style: none; }
+    details summary::before { content: '▶ '; font-size: .7rem; }
+    details[open] summary::before { content: '▼ '; }
+    details .detail-body { margin-top: .7rem; }
+
+    /* ── PRODUCT TABLE ── */
+    .tbl-wrap { overflow-x: auto; margin-top: .5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+    th { background: #fef0f5; padding: .55rem .75rem; text-align: left; font-weight: 700; color: var(--pink-dark); border-bottom: 2px solid var(--border); white-space: nowrap; }
+    td { padding: .5rem .75rem; border-bottom: 1px solid #f8f0f4; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fff5f9; }
+    .tag { display: inline-block; padding: .18rem .55rem; border-radius: 20px; font-size: .73rem; font-weight: 700; background: #fde8f3; color: var(--pink-dark); white-space: nowrap; }
+
+    /* ── OUTPUT TEXTAREA ── */
+    #outputText { font-family: inherit; font-size: .93rem; line-height: 1.85; min-height: 260px; border-color: var(--border); }
+
+    /* ── MODEL ROW ── */
+    .model-row { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+    .model-row label { margin: 0; white-space: nowrap; }
+    .model-row select { flex: 1; min-width: 160px; }
+
+    /* ══════════════════════════════════════════
+       DAILY PICKS STYLES
+    ══════════════════════════════════════════ */
+    .picks-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .6rem;
+      margin-bottom: 1.2rem;
+    }
+    .picks-meta .date-badge {
+      font-size: .82rem;
+      background: #fde8f3;
+      color: var(--pink-dark);
+      padding: .3rem .8rem;
+      border-radius: 20px;
+      font-weight: 700;
+    }
+    .picks-meta .window-badge {
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .pick-card {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+      background: #fff;
+      transition: box-shadow .18s;
+    }
+    .pick-card:hover { box-shadow: 0 4px 16px rgba(244,160,181,.18); }
+
+    .pick-header {
+      display: flex;
+      gap: .9rem;
+      padding: .9rem 1rem;
+      align-items: flex-start;
+      cursor: pointer;
+    }
+    .pick-thumb {
+      width: 130px;
+      flex-shrink: 0;
+      border-radius: 8px;
+      object-fit: cover;
+      aspect-ratio: 16/9;
+      background: #f0e0ea;
+    }
+    .pick-info { flex: 1; min-width: 0; }
+    .pick-info h3 { font-size: .9rem; font-weight: 700; line-height: 1.45; word-break: break-word; margin-bottom: .25rem; }
+    .pick-info .ch { font-size: .78rem; color: var(--muted); }
+    .pick-stats {
+      display: flex;
+      gap: .7rem;
+      flex-wrap: wrap;
+      margin-top: .4rem;
+    }
+    .pick-stat {
+      font-size: .74rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: .2rem;
+    }
+    .pick-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .3rem;
+      margin-top: .45rem;
+    }
+    .tag-mini {
+      font-size: .7rem;
+      padding: .12rem .45rem;
+      border-radius: 20px;
+      background: #f5e8fb;
+      color: #7c3aed;
+      font-weight: 600;
+    }
+    .no-transcript {
+      font-size: .72rem;
+      color: #b45309;
+      background: #fff8e1;
+      padding: .12rem .45rem;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    /* toggle arrow */
+    .pick-toggle { font-size: .8rem; color: var(--muted); flex-shrink: 0; align-self: center; transition: transform .2s; }
+    .pick-card.open .pick-toggle { transform: rotate(180deg); }
+
+    /* expanded body */
+    .pick-body {
+      display: none;
+      border-top: 1.5px solid var(--border);
+      padding: 1rem;
+    }
+    .pick-card.open .pick-body { display: block; }
+
+    .pick-body .pick-output {
+      font-family: inherit;
+      font-size: .9rem;
+      line-height: 1.85;
+      min-height: 180px;
+      border-color: var(--border);
+      margin-top: .6rem;
+    }
+    .pick-body .yt-link {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .8rem;
+      color: var(--blue);
+      text-decoration: none;
+      margin-bottom: .7rem;
+    }
+    .pick-body .yt-link:hover { text-decoration: underline; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+    }
+    .empty-state .big { font-size: 2.5rem; margin-bottom: .6rem; }
+    .empty-state p { font-size: .9rem; line-height: 1.6; }
+    .empty-state code {
+      font-family: monospace;
+      background: #f5f0f5;
+      padding: .15rem .4rem;
+      border-radius: 4px;
+      font-size: .85rem;
+    }
+
+    @media (max-width: 560px) {
+      header h1 { font-size: 1.3rem; }
+      .tab-btn { padding: .6rem 1.1rem; font-size: .85rem; }
+      .row2 { grid-template-columns: 1fr; }
+      .video-preview { flex-direction: column; }
+      .video-preview img { width: 100%; }
+      .pick-header { flex-direction: column; }
+      .pick-thumb { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💄 메이크업 손민수 자동 생성기</h1>
+  <p>유튜브 링크만 넣으면 게시물 텍스트가 자동으로!</p>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-btn-manual" onclick="switchTab('manual')">✍️ 직접 분석</button>
+    <button class="tab-btn"        id="tab-btn-daily"  onclick="switchTab('daily')">📅 오늘의 추천</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ══ TAB: 직접 분석 ══════════════════════════════════════ -->
+  <div id="tab-manual">
+
+    <!-- API 설정 -->
+    <div class="card">
+      <div class="card-title">⚙️ API 설정</div>
+      <div class="field">
+        <label>Anthropic API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off" />
+        <p class="hint">🔒 브라우저 localStorage에만 저장됩니다. &nbsp;<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">키 발급 →</a></p>
+      </div>
+      <div class="field">
+        <div class="model-row">
+          <label for="modelSel">분석 모델</label>
+          <select id="modelSel">
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (빠름·저렴)</option>
+            <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (정확도↑)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 영상 입력 -->
+    <div class="card">
+      <div class="card-title">🎬 영상 정보 입력</div>
+      <div class="field">
+        <label>유튜브 영상 링크</label>
+        <input type="url" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>크리에이터 이름</label>
+          <input type="text" id="creatorName" placeholder="예: 민수" />
+        </div>
+        <div class="field">
+          <label>그룹명 (선택)</label>
+          <input type="text" id="groupName" placeholder="예: 아이브, 뉴진스" />
+        </div>
+      </div>
+
+      <div id="videoPreview" style="display:none"></div>
+
+      <details id="transcriptDetails">
+        <summary>자막 직접 붙여넣기 (자동 추출 실패 시 사용)</summary>
+        <div class="detail-body">
+          <textarea id="manualTranscript" rows="7" placeholder="영상 설명란이나 자막 내용을 여기에 붙여넣으세요..."></textarea>
+        </div>
+      </details>
+
+      <div id="statusMsg"></div>
+
+      <button class="btn btn-primary" id="analyzeBtn" onclick="runAnalysis()" style="margin-top:1.1rem">
+        ✨ 분석 시작
+      </button>
+    </div>
+
+    <!-- 결과 -->
+    <div id="resultSection" style="display:none">
+      <div class="card">
+        <div class="card-title">🛍️ 추출된 제품 목록</div>
+        <div class="tbl-wrap" id="productTable"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 게시물 텍스트 <span style="font-weight:400;font-size:.8rem;color:var(--muted)">(직접 편집 가능)</span></div>
+        <textarea id="outputText" rows="20"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-sm btn-reset" onclick="resetAll()">↩ 처음으로</button>
+          <button class="btn btn-sm btn-copy" id="copyBtn" onclick="copyOutput()">📋 복사</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-manual -->
+
+
+  <!-- ══ TAB: 오늘의 추천 ═════════════════════════════════════ -->
+  <div id="tab-daily" style="display:none">
+
+    <div class="card">
+      <div class="card-title">📅 오늘의 메이크업 영상 추천</div>
+      <p style="font-size:.84rem;color:var(--muted);line-height:1.6;">
+        매일 오전 9시 KST에 GitHub Actions가 자동으로 국내 메이크업 영상 5개를 선정·분석합니다.<br>
+        영상을 클릭하면 추출된 제품 목록과 게시물 텍스트를 바로 확인할 수 있습니다.
+      </p>
+    </div>
+
+    <div id="dailyContent"></div>
+
+  </div><!-- /tab-daily -->
+
+</div><!-- /wrap -->
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  SHARED CONSTANTS
+// ══════════════════════════════════════════════════════════════
+const CLAUDE_URL   = 'https://api.anthropic.com/v1/messages';
+const PROXY1       = 'https://corsproxy.io/?';
+const PROXY2       = 'https://api.allorigins.win/raw?url=';
+
+// ══════════════════════════════════════════════════════════════
+//  INIT — restore saved settings
+// ══════════════════════════════════════════════════════════════
+const $id  = id => document.getElementById(id);
+const save = (k,v) => localStorage.setItem(k,v);
+const load = k    => localStorage.getItem(k) || '';
+
+$id('apiKey').value   = load('_mss_apikey');
+$id('modelSel').value = load('_mss_model') || 'claude-sonnet-4-6';
+
+$id('apiKey').addEventListener('input',  e => save('_mss_apikey', e.target.value));
+$id('modelSel').addEventListener('change', e => save('_mss_model', e.target.value));
+
+$id('youtubeUrl').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+
+let lastTranscript = '';
+
+// ══════════════════════════════════════════════════════════════
+//  TAB SWITCHER
+// ══════════════════════════════════════════════════════════════
+function switchTab(name) {
+  ['manual','daily'].forEach(t => {
+    $id(`tab-${t}`).style.display       = t === name ? '' : 'none';
+    $id(`tab-btn-${t}`).classList.toggle('active', t === name);
+  });
+  if (name === 'daily') loadDailyPicks();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DAILY PICKS
+// ══════════════════════════════════════════════════════════════
+let dailyLoaded = false;
+
+async function loadDailyPicks() {
+  if (dailyLoaded) return;
+
+  const el = $id('dailyContent');
+  el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>오늘의 추천 영상 불러오는 중...</div></div>';
+
+  try {
+    const r    = await fetch(`./daily_picks.json?_=${Date.now()}`);
+    const data = await r.json();
+
+    if (!data.videos?.length) {
+      el.innerHTML = renderEmpty();
+      return;
+    }
+
+    dailyLoaded = true;
+    el.innerHTML = renderDailyPicks(data);
+  } catch (e) {
+    el.innerHTML = renderEmpty();
+  }
+}
+
+function renderEmpty() {
+  return `<div class="card">
+    <div class="empty-state">
+      <div class="big">🌸</div>
+      <p>아직 오늘의 추천 영상이 없습니다.<br>
+      GitHub Actions 설정 후 매일 오전 9시에 자동으로 채워집니다.<br><br>
+      <strong>설정 방법:</strong><br>
+      GitHub 레포 → Settings → Secrets → Actions 에서<br>
+      <code>YOUTUBE_API_KEY</code> 와 <code>ANTHROPIC_API_KEY</code> 를 추가하세요.</p>
+    </div>
+  </div>`;
+}
+
+function renderDailyPicks(data) {
+  const todayKST = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'-').replace('.','');
+
+  let html = `<div class="card" style="padding:1rem 1.5rem">
+    <div class="picks-meta">
+      <span class="date-badge">📅 ${data.date || todayKST}</span>
+      <span class="window-badge">검색 범위: ${data.timeWindow || ''} · ${data.videos.length}개 영상</span>
+    </div>
+  </div>`;
+
+  data.videos.forEach((v, i) => {
+    const views    = v.viewCount ? formatNum(v.viewCount) + ' 조회' : '';
+    const likes    = v.likeCount ? '♥ ' + formatNum(v.likeCount)    : '';
+    const pubAgo   = timeAgo(v.publishedAt);
+    const catTags  = [...new Set(v.products.map(p => p.category))].slice(0,4);
+    const noSub    = !v.transcriptFetched;
+
+    html += `<div class="pick-card" id="pick-${i}">
+      <div class="pick-header" onclick="togglePick(${i})">
+        <img class="pick-thumb" src="${v.thumbnail}" alt="" loading="lazy"
+             onerror="this.style.background='#f0e0ea';this.removeAttribute('src')">
+        <div class="pick-info">
+          <h3>${esc(v.title)}</h3>
+          <div class="ch">${esc(v.channelTitle)}</div>
+          <div class="pick-stats">
+            ${views  ? `<span class="pick-stat">👁 ${views}</span>` : ''}
+            ${likes  ? `<span class="pick-stat">${likes}</span>`    : ''}
+            ${pubAgo ? `<span class="pick-stat">🕐 ${pubAgo}</span>` : ''}
+          </div>
+          <div class="pick-tags">
+            ${catTags.map(c => `<span class="tag-mini">${c}</span>`).join('')}
+            ${v.products.length ? `<span class="tag-mini">제품 ${v.products.length}개</span>` : ''}
+            ${noSub ? `<span class="no-transcript">자막없음</span>` : ''}
+          </div>
+        </div>
+        <span class="pick-toggle">▼</span>
+      </div>
+
+      <div class="pick-body">
+        <a class="yt-link" href="${v.url}" target="_blank" rel="noopener">
+          ▶ 유튜브에서 보기 — ${esc(v.title)}
+        </a>
+
+        ${v.products.length ? renderMiniTable(v.products) : '<p style="font-size:.85rem;color:var(--muted)">추출된 제품 없음</p>'}
+
+        <div style="margin-top:1rem">
+          <label style="font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:.4rem">📋 게시물 텍스트 (편집 후 복사)</label>
+          <textarea class="pick-output" id="post-${i}" rows="16">${esc(v.postText)}</textarea>
+          <div class="btn-row">
+            <button class="btn btn-sm btn-copy" onclick="copyPick(${i})">📋 복사</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  return html;
+}
+
+function renderMiniTable(products) {
+  let h = `<div class="tbl-wrap"><table>
+    <thead><tr><th>카테고리</th><th>브랜드</th><th>제품명</th><th>호수</th><th>가격</th></tr></thead>
+    <tbody>`;
+  for (const p of products) {
+    h += `<tr>
+      <td><span class="tag">${p.category}</span></td>
+      <td>${esc(p.brand||'—')}</td>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.shade||'—')}</td>
+      <td>${esc(p.price||'—')}</td>
+    </tr>`;
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function togglePick(i) {
+  const card = $id(`pick-${i}`);
+  card.classList.toggle('open');
+}
+
+function copyPick(i) {
+  const ta  = $id(`post-${i}`);
+  const btn = ta.closest('.pick-body').querySelector('.btn-copy');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    btn.textContent = '✅ 복사됨!';
+    setTimeout(() => { btn.textContent = '📋 복사'; }, 2200);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  MANUAL ANALYSIS (기존 기능)
+// ══════════════════════════════════════════════════════════════
+function setStatus(html, type = 'info') {
+  const el = $id('statusMsg');
+  el.innerHTML = html ? `<div class="status ${type}">${html}</div>` : '';
+}
+function spin(msg) {
+  setStatus(`<div class="spin-wrap"><div class="spinner"></div>${msg}</div>`);
+}
+
+function extractVideoId(url) {
+  const m = url.match(/(?:v=|\/v\/|youtu\.be\/|\/embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+async function proxyFetch(targetUrl, opts = {}) {
+  const sig = AbortSignal.timeout ? AbortSignal.timeout(9000) : undefined;
+  const o   = { ...opts, signal: sig };
+  try {
+    const r = await fetch(PROXY1 + encodeURIComponent(targetUrl), o);
+    if (r.ok) return r;
+  } catch { /* fallthrough */ }
+  return fetch(PROXY2 + encodeURIComponent(targetUrl), o);
+}
+
+async function fetchVideoInfo(videoId) {
+  try {
+    const r = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined }
+    );
+    return r.ok ? r.json() : null;
+  } catch { return null; }
+}
+
+async function fetchTranscript(videoId) {
+  for (const lang of ['ko','en']) {
+    for (const extra of ['','&kind=asr']) {
+      try {
+        const r    = await proxyFetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}${extra}&fmt=json3`);
+        const data = await r.json();
+        if (data?.events?.length) {
+          const text = data.events.filter(e=>e.segs).map(e=>e.segs.map(s=>s.utf8||'').join('')).join(' ').trim();
+          if (text.length > 30) return text;
+        }
+      } catch { /* try next */ }
+    }
+  }
+  for (const lang of ['ko','en']) {
+    try {
+      const r   = await proxyFetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}`);
+      const xml = await r.text();
+      if (xml.includes('<text')) {
+        const doc  = new DOMParser().parseFromString(xml,'text/xml');
+        const text = [...doc.querySelectorAll('text')].map(t=>t.textContent).join(' ').trim();
+        if (text.length > 30) return text;
+      }
+    } catch { /* try next */ }
+  }
+  try {
+    const r    = await proxyFetch(`https://www.youtube.com/watch?v=${videoId}`);
+    const html = await r.text();
+    const m    = html.match(/"captionTracks":\s*(\[.*?\])/);
+    if (m) {
+      const tracks = JSON.parse(m[1]);
+      for (const tr of tracks) {
+        if (!tr.baseUrl) continue;
+        try {
+          const cr  = await proxyFetch(tr.baseUrl);
+          const xml = await cr.text();
+          if (xml.includes('<text')) {
+            const doc = new DOMParser().parseFromString(xml,'text/xml');
+            return [...doc.querySelectorAll('text')].map(t=>t.textContent).join(' ').trim();
+          }
+        } catch { /* try next track */ }
+      }
+    }
+  } catch { /* give up */ }
+  return null;
+}
+
+async function analyzeWithClaude(transcript, creatorInfo) {
+  const apiKey = $id('apiKey').value.trim();
+  if (!apiKey) throw new Error('Anthropic API 키를 입력해주세요.');
+
+  const content = transcript || '(자막 없음)';
+  const prompt  = `다음은 유튜브 메이크업 영상의 자막/내용입니다.
+
+크리에이터: ${creatorInfo}
+
+자막:
+${content.slice(0,9000)}
+
+영상에서 언급된 메이크업 제품을 모두 추출하고 아래 JSON 형식으로만 응답하세요. JSON 외 텍스트는 절대 쓰지 마세요.
+
+{
+  "products": [
+    {
+      "category": "카테고리",
+      "brand": "브랜드명",
+      "name": "제품명",
+      "shade": "호수·색상명 (없으면 null)",
+      "price": "가격 (없으면 null)"
+    }
+  ],
+  "hashtags": ["#해시태그1"]
+}
+
+카테고리: 베이스/프라이머, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 블러셔, 하이라이터, 컨투어/쉐딩, 아이브로우, 아이섀도우, 아이라이너, 마스카라, 립, 기타
+
+규칙:
+- 실제 언급된 제품만 추출 (추측 금지)
+- 해시태그 6-12개, #메이크업 #손민수 포함
+- JSON만 출력`;
+
+  const r = await fetch(CLAUDE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: $id('modelSel').value,
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!r.ok) {
+    const e = await r.json().catch(()=>({}));
+    throw new Error(e.error?.message || `API 오류 (${r.status})`);
+  }
+
+  const data = await r.json();
+  const raw  = data.content?.[0]?.text || '';
+  const m    = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Claude 응답 파싱 실패: ' + raw.slice(0,120));
+  return JSON.parse(m[0]);
+}
+
+function buildPost(products, creatorInfo, hashtags) {
+  const byCategory = {};
+  for (const p of products) {
+    (byCategory[p.category] = byCategory[p.category] || []).push(p);
+  }
+  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ ${creatorInfo} 메이크업 손민수\n`;
+  for (const [cat, items] of Object.entries(byCategory)) {
+    out += `\n♡ ${cat}\n`;
+    for (const p of items) {
+      const name  = [p.brand, p.name].filter(Boolean).join(' ');
+      const shade = p.shade ? ` / ${p.shade}` : '';
+      const price = p.price ? ` / ${p.price}` : ' / -';
+      out += `${name}${shade}${price}\n🔗\n`;
+    }
+  }
+  if (hashtags?.length) out += '\n' + hashtags.join(' ');
+  return out;
+}
+
+function renderTable(products) {
+  if (!products.length) {
+    $id('productTable').innerHTML = '<p style="color:var(--muted);text-align:center;padding:1.2rem">추출된 제품이 없습니다.</p>';
+    return;
+  }
+  let html = `<table><thead><tr><th>카테고리</th><th>브랜드</th><th>제품명</th><th>호수/색상</th><th>가격</th></tr></thead><tbody>`;
+  for (const p of products) {
+    html += `<tr>
+      <td><span class="tag">${p.category}</span></td>
+      <td>${esc(p.brand||'—')}</td>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.shade||'—')}</td>
+      <td>${esc(p.price||'—')}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  $id('productTable').innerHTML = html;
+}
+
+async function runAnalysis() {
+  const urlVal      = $id('youtubeUrl').value.trim();
+  const creatorName = $id('creatorName').value.trim();
+  const groupName   = $id('groupName').value.trim();
+  const manualText  = $id('manualTranscript').value.trim();
+  const btn         = $id('analyzeBtn');
+
+  if (!urlVal && !manualText) { setStatus('유튜브 URL 또는 자막 내용을 입력해주세요.','err'); return; }
+
+  btn.disabled = true; btn.textContent = '⏳ 분석 중...';
+  $id('resultSection').style.display = 'none';
+  setStatus('');
+
+  try {
+    let transcript  = manualText;
+    const creatorInfo = [groupName, creatorName].filter(Boolean).join(' ') || '크리에이터';
+
+    if (urlVal) {
+      const vid = extractVideoId(urlVal);
+      if (!vid) { setStatus('올바른 유튜브 URL을 입력해주세요.','err'); return; }
+
+      spin('영상 정보 가져오는 중...');
+      const info = await fetchVideoInfo(vid);
+      if (info) {
+        $id('videoPreview').style.display = 'flex';
+        $id('videoPreview').innerHTML = `
+          <img src="${info.thumbnail_url}" alt="썸네일" onerror="this.style.display='none'">
+          <div class="vi"><h3>${esc(info.title)}</h3><p>${esc(info.author_name)}</p></div>`;
+      }
+
+      if (!transcript) {
+        spin('자막 추출 중 (한국어 → 영어 → 자동생성 순)...');
+        transcript = await fetchTranscript(vid);
+        if (!transcript) {
+          setStatus('⚠️ 자막 자동 추출 실패 — 아래 "자막 직접 붙여넣기"를 펼쳐 내용을 붙여넣은 후 다시 눌러주세요.','err');
+          $id('transcriptDetails').open = true;
+          return;
+        }
+        $id('manualTranscript').value = transcript;
+      }
+    }
+
+    if (!transcript) { setStatus('분석할 내용이 없습니다.','err'); return; }
+    lastTranscript = transcript;
+
+    spin('Claude AI가 메이크업 제품 분석 중...');
+    const result = await analyzeWithClaude(transcript, creatorInfo);
+    const products = result.products || [];
+    const hashtags = result.hashtags || [];
+
+    renderTable(products);
+    $id('outputText').value = buildPost(products, creatorInfo, hashtags);
+    $id('resultSection').style.display = 'block';
+    $id('resultSection').scrollIntoView({ behavior:'smooth', block:'start' });
+    setStatus(`✅ 완료! 제품 ${products.length}개 추출됨.`, 'ok');
+
+  } catch (err) {
+    setStatus(`❌ ${esc(err.message)}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '✨ 분석 시작';
+  }
+}
+
+function copyOutput() {
+  const text = $id('outputText').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = $id('copyBtn');
+    btn.textContent = '✅ 복사됨!';
+    setTimeout(() => { btn.textContent = '📋 복사'; }, 2200);
+  }).catch(() => { $id('outputText').select(); document.execCommand('copy'); });
+}
+
+function resetAll() {
+  $id('youtubeUrl').value = '';
+  $id('manualTranscript').value = '';
+  $id('videoPreview').style.display = 'none';
+  $id('resultSection').style.display = 'none';
+  setStatus('');
+  lastTranscript = '';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════════════════
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatNum(n) {
+  if (n >= 10000) return Math.round(n/10000) + '만';
+  if (n >= 1000)  return Math.round(n/1000)  + '천';
+  return String(n);
+}
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 3600)     return Math.round(diff/60)   + '분 전';
+  if (diff < 86400)    return Math.round(diff/3600)  + '시간 전';
+  if (diff < 86400*7)  return Math.round(diff/86400) + '일 전';
+  if (diff < 86400*30) return Math.round(diff/86400/7) + '주 전';
+  return Math.round(diff/86400/30) + '개월 전';
+}
+</script>
+</body>
+</html>

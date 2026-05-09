@@ -1,0 +1,44 @@
+name: Daily Makeup Video Picks
+
+on:
+  schedule:
+    # 매일 오전 9시 KST (= 00:00 UTC)
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    # GitHub Actions 탭에서 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run daily analysis
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/daily_analysis.py
+
+      - name: Commit updated daily_picks.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add daily_picks.json
+          # 변경이 있을 때만 커밋 (없으면 조용히 종료)
+          git diff --staged --quiet || \
+            git commit -m "chore: daily picks $(date +'%Y-%m-%d')"
+          git push
