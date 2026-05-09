@@ -853,6 +853,40 @@ const BRAND_ALIASES = {
   'milani': '밀라니',
 };
 
+// Instagram @계정명 → 브랜드명
+const INSTA_ACCOUNT_BRANDS = {
+  'mude_official': '무드',
+  'holikaholika_official': '홀리카홀리카',
+  'ipknofficial': '입큰',
+  'naming.cosmetic': '네이밍',
+  'peripera_official': '페리페라',
+  'a.chicosmetics': '에이치아이',
+  'romand_official': '롬앤',
+  'clio_cosmetics': '클리오',
+  'etudehouse': '에뛰드',
+  'innisfree_official': '이니스프리',
+  'laneige_official': '라네즈',
+  'hera_official': '헤라',
+  'missha_official': '미샤',
+  'tonymoly_official': '토니모리',
+  'dasique_official': '데이지크',
+  'espoir_official': '에스쁘아',
+  'wakemake_official': '웨이크메이크',
+  'kahibeauty': '가히',
+  'threeconcepteyes': '3CE',
+  'nars_cosmetics': '나스',
+  'maccosmetics': '맥',
+  'diorbeauty': '디올',
+};
+
+// 캡션 내 @계정명을 브랜드명으로 치환
+function preprocessInstagramCaption(text) {
+  return text.replace(/@([\w.]+)/g, (match, handle) => {
+    const brand = INSTA_ACCOUNT_BRANDS[handle.toLowerCase()];
+    return brand ? brand : match;
+  });
+}
+
 function detectBrand(text) {
   const lo = text.toLowerCase();
   return BRANDS.slice().sort((a,b) => b.length - a.length)
@@ -940,7 +974,8 @@ function extractProductsFromOCR(ocrText) {
 }
 
 function extractProducts(description, transcript) {
-  const combined = [description, transcript].filter(Boolean).join('\n');
+  const raw      = [description, transcript].filter(Boolean).join('\n');
+  const combined = preprocessInstagramCaption(raw);
   const lines    = combined.split(/[\n。]+/).map(l => l.replace(/[✔✅☑◆▶•·\-*①②③④⑤⑥⑦⑧⑨⑩]/g,'').trim()).filter(Boolean);
   const results  = [];
   const seen     = new Set();
@@ -1876,9 +1911,9 @@ async function loadInstaQueue() {
 function renderInstaCard(item, i) {
   const products = extractProducts(item.caption || '', '');
   const preview  = (item.caption || '').slice(0, 120).replace(/\n/g, ' ');
-  const username = item.username || item.sourceLabel || '크리에이터';
+  const authorId = item.username || item.sourceLabel || '크리에이터';
   const ago      = timeAgo(item.collectedAt);
-  _instaData[i]  = { products, username };
+  _instaData[i]  = { products, username: authorId };
 
   const productRows = products.length
     ? products.map((p, pi) => `
@@ -1893,13 +1928,13 @@ function renderInstaCard(item, i) {
       </div>`).join('')
     : '<p style="font-size:.83rem;color:var(--muted);padding:.5rem 0">캡션에서 제품을 찾지 못했습니다. 아래 텍스트를 직접 편집하세요.</p>';
 
-  const postText = buildInstaPost(products, username, []);
+  const postText = buildInstaPost(products, authorId, []);
 
   return `<div class="insta-card" id="insta-card-${i}">
     <div class="insta-header" onclick="toggleInsta(${i})">
       ${item.image ? `<img class="insta-thumb" src="${esc(item.image)}" onerror="this.style.display='none'">` : '<div class="insta-thumb"></div>'}
       <div class="insta-info">
-        <div class="username">@${esc(username)}</div>
+        <div class="username">@${esc(authorId)}</div>
         <div class="caption-preview">${esc(preview)}</div>
         <div class="pick-stats" style="margin-top:.35rem">
           ${ago ? `<span class="pick-stat">🕐 ${ago}</span>` : ''}
@@ -1933,27 +1968,51 @@ function renderInstaCard(item, i) {
 
 const _instaData = {};
 
+// 카테고리 표시 순서
+const INSTA_CATEGORY_ORDER = ['아이섀도우', '블러셔', '하이라이터', '립'];
+
 // 인스타 게시물 포맷 빌드
-function buildInstaPost(products, creatorInfo, extraHashtags) {
+function buildInstaPost(products, authorId, extraHashtags) {
+  const header = (authorId && authorId !== '크리에이터')
+    ? `✺ @${authorId}님 메이크업 손민수`
+    : '✺ Instagram 메이크업 손민수';
+
+  // 중복 제거
+  const seen = new Set();
+  const unique = products.filter(p => {
+    const k = `${(p.brand||'').toLowerCase()}-${(p.name||'').toLowerCase()}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  // 카테고리별 그룹
   const byCategory = {};
-  for (const p of products) {
+  for (const p of unique) {
     (byCategory[p.category] = byCategory[p.category] || []).push(p);
   }
 
-  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n✺ ${creatorInfo} 메이크업 손민수\n`;
-  for (const [cat, items] of Object.entries(byCategory)) {
+  // 지정 순서 → 나머지
+  const orderedCats = [
+    ...INSTA_CATEGORY_ORDER.filter(c => byCategory[c]),
+    ...Object.keys(byCategory).filter(c => !INSTA_CATEGORY_ORDER.includes(c)),
+  ];
+
+  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n${header}\n`;
+  for (const cat of orderedCats) {
     out += `\n♡ ${cat}\n`;
-    for (const p of items) {
+    for (const p of byCategory[cat]) {
       const name  = [p.brand, p.name].filter(Boolean).join(' ');
       const shade = p.shade ? ` #${p.shade.replace(/^#/, '')}` : '';
-      const price = p.price ? ` / ${p.price}` : ' / 원';
+      const price = p.price ? `/ ${p.price}` : '/ 원';
       const link  = p.link  ? `🔗 ${p.link}` : '🔗';
-      out += `${name}${shade}${price}\n${link}\n`;
+      out += `${name}${shade} ${price}\n${link}\n\n`;
     }
   }
-  const tags = generateHashtags('', creatorInfo, products);
-  if (tags.length) out += '\n' + tags.join(' ');
-  return out;
+
+  const tags = generateHashtags('', authorId || '', unique);
+  if (tags.length) out += tags.join(' ');
+  return out.trimEnd();
 }
 
 // 가격/링크 입력 시 게시물 텍스트 실시간 업데이트
