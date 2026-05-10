@@ -2946,6 +2946,14 @@ async function enrichTodayPicksWithGemini(geminiKey) {
       const ta = $id(`insta-post-${i}`);
       if (ta) ta.value = buildInstaPost(products, username, []);
 
+      // 자동 저장 (다음 로드 시 복원)
+      const itemId = _instaData[i].itemId;
+      if (itemId) {
+        if (!_queueData[itemId]) _queueData[itemId] = {};
+        _queueData[itemId].products = products;
+        scheduleQueueSave(itemId);
+      }
+
       const card = $id(`insta-card-${i}`);
       const preview = card?.querySelector('.caption-preview');
       if (preview && !preview.nextElementSibling?.classList?.contains('ai-badge')) {
