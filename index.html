@@ -2280,28 +2280,39 @@ async function _postGemini(body) {
 }
 
 function _parseGeminiText(data) {
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-  if (!text || /^unknown$/i.test(text.split('\n')[0].trim())) return null;
-  return text.split('\n')[0].trim().replace(/^["'`*#\-\s]+|["'`*\s]+$/g, '') || null;
+  // 원문 전체를 콘솔에 출력 (디버깅)
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  console.log('[Gemini 원문]', raw);
+
+  const first = raw.trim().split('\n')[0].trim();
+  if (!first || /^unknown$/i.test(first)) return null;
+  // 따옴표·마크다운·앞뒤 공백 제거
+  return first.replace(/^["'`*#\-\s]+|["'`*\s]+$/g, '') || null;
 }
 
 // ── 핵심: 제품명 조회 ─────────────────────────────────────────
 async function lookupProductName(nameOrBrand, shade, category) {
   await _throttleLookup();
 
-  const hint = [nameOrBrand, shade].filter(Boolean).join(' ');
+  // 브랜드명과 제품 구분 (e.g. "에뛰드 틴트" → brand="에뛰드", hint="틴트")
+  const words = nameOrBrand.trim().split(/\s+/);
   const prompt =
-    `한국 화장품 브랜드의 정확한 제품 라인명을 알려줘.\n\n` +
-    `- 브랜드/입력값: "${nameOrBrand}"\n` +
-    `- 색상/호수: "${shade}"\n` +
-    `- 카테고리: "${category}"\n\n` +
-    `위 정보로 정확한 제품 시리즈명(라인명)을 찾아줘. ` +
-    `구글 검색 결과도 참고해서 실제 판매되는 제품명을 알려줘.\n\n` +
-    `예시:\n` +
-    `에뛰드 + 뮤심한베이지 + 립 → 이더앤 듀이 시럽 틴트\n` +
-    `롬앤 + 00레드 + 립 → 제로 매트 립스틱\n` +
-    `클리오 + 브라운 + 아이라이너 → 킬 블랙 퍼펙트 라이너\n\n` +
-    `규칙: 제품 라인명만 한 줄. 브랜드명·색상명 제외. 모르면 "unknown".`;
+    `당신은 한국 화장품 전문가입니다. 아래 정보로 정확한 제품 라인명(시리즈명)을 찾아주세요.\n\n` +
+    `입력:\n` +
+    `  브랜드/제품: "${nameOrBrand}"\n` +
+    `  색상/호수: "${shade}"\n` +
+    `  카테고리: "${category}"\n\n` +
+    `예시 (출력 형식 참고):\n` +
+    `  에뛰드 + 뮤심한베이지 + 립 → 포근 픽싱 틴트\n` +
+    `  롬앤 + 00레드 + 립 → 제로 매트 립스틱\n` +
+    `  클리오 + 브라운 + 아이라이너 → 킬 블랙 퍼펙트 라이너\n` +
+    `  맥 + 루비 우 + 립스틱 → 맥 립스틱\n\n` +
+    `규칙:\n` +
+    `  - 제품 라인명(시리즈명)만 한 줄로 답하세요\n` +
+    `  - 브랜드명 포함해도 됩니다 (예: 에뛰드 포근 픽싱 틴트)\n` +
+    `  - 색상명/호수는 제외\n` +
+    `  - 확실하지 않으면 "unknown"\n` +
+    `  - 다른 설명 없이 제품명만 출력`;
 
   // 시도 순서: ① googleSearch 그라운딩 ② google_search 그라운딩 ③ 지식 기반
   const attempts = [
@@ -2311,21 +2322,28 @@ async function lookupProductName(nameOrBrand, shade, category) {
   ];
 
   let lastErr;
-  for (const extra of attempts) {
+  for (let ai = 0; ai < attempts.length; ai++) {
+    const extra = attempts[ai];
+    const label = ai === 0 ? 'googleSearch' : ai === 1 ? 'google_search' : '지식기반';
     const body = JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       ...extra,
-      generationConfig: { maxOutputTokens: 80, temperature: 0.1 },
+      generationConfig: { maxOutputTokens: 100, temperature: 0.2 },
     });
     try {
+      console.log(`[제품명 검색] 시도 ${ai + 1}/3 (${label}):`, nameOrBrand, '+', shade);
       const r = await _postGemini(body);
-      if (r.status === 400 || r.status === 403) continue; // 그라운딩 미지원 → 다음 시도
+      console.log(`[제품명 검색] 응답 상태:`, r.status);
+      if (r.status === 400 || r.status === 403) { console.log('  → 그라운딩 미지원, 다음 시도'); continue; }
       if (!r.ok) throw new Error(`Gemini API ${r.status}`);
-      const result = _parseGeminiText(await r.json());
+      const data = await r.json();
+      const result = _parseGeminiText(data);
+      console.log(`[제품명 검색] 파싱 결과:`, result);
       if (result) return result;
-      // "unknown" 또는 빈 응답 → 다음 시도
+      console.log('  → 결과 없음, 다음 시도');
     } catch (e) {
-      if (e.code === 'NO_KEY') throw e; // 키 없음은 즉시 전파
+      console.warn(`[제품명 검색] 오류 (${label}):`, e.message);
+      if (e.code === 'NO_KEY') throw e;
       lastErr = e;
     }
   }
@@ -2378,15 +2396,19 @@ async function searchProductName(btn, cardIdx) {
       nameInput.dispatchEvent(new Event('input'));
       nameInput.style.transition = 'border-color .3s';
       nameInput.style.borderColor = 'var(--green)';
-      setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
+      setTimeout(() => { nameInput.style.borderColor = ''; }, 3000);
       btn.innerHTML = '✅';
-      _showLookupToast(`✅ "${found}" 으로 완성`, 'ok');
+      // 결과를 토스트 + 필드에 표시 (같은 값이어도 명시)
+      _showLookupToast(`✅  ${found}`, 'ok');
     } else {
       btn.innerHTML = '❓';
-      _showLookupToast(`"${curName} ${shade}" 검색 결과 없음. 직접 입력해주세요.`, 'info');
+      _showLookupToast(
+        `"${[curName, shade].filter(Boolean).join(' ')}" — 정확한 제품명을 찾지 못했어요.\n직접 수정하거나 더 구체적인 브랜드명·색상을 입력해보세요.`,
+        'info'
+      );
     }
   } catch (e) {
-    console.error('제품명 검색 실패:', e);
+    console.error('[제품명 검색 최종 실패]', e);
     btn.innerHTML = '❌';
     _showLookupToast(e.message || '검색 실패', 'err');
   }
