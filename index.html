@@ -455,6 +455,17 @@
     }
     .btn-lookup:hover:not(:disabled) { background: #ede5ff; border-color: #c084fc; }
     .btn-lookup:disabled { opacity: .45; cursor: not-allowed; }
+    /* 가격 셀: input + 🛒 버튼 */
+    .price-cell { display: flex; gap: .25rem; align-items: center; }
+    .price-cell input { flex: 1; min-width: 0; }
+    .btn-oy {
+      flex-shrink: 0; border: 1.5px solid #fbbf24; background: #fffbeb;
+      border-radius: 7px; padding: .3rem .45rem; font-size: .8rem;
+      cursor: pointer; transition: background .15s, border-color .15s;
+      white-space: nowrap; line-height: 1;
+    }
+    .btn-oy:hover:not(:disabled) { background: #fef3c7; border-color: #f59e0b; }
+    .btn-oy:disabled { opacity: .45; cursor: not-allowed; }
     .product-edit-header {
       display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
@@ -636,75 +647,46 @@
 
 <header>
   <h1>💄 메이크업 손민수 자동 생성기</h1>
-  <p>유튜브 링크만 넣으면 게시물 텍스트가 자동으로!</p>
+  <p>인스타 캡션에서 제품 정보를 자동으로!</p>
   <div class="tab-bar">
-    <button class="tab-btn active" id="tab-btn-manual" onclick="switchTab('manual')">✍️ 직접 분석</button>
-    <button class="tab-btn"        id="tab-btn-daily"  onclick="switchTab('daily')">📅 오늘의 추천</button>
-    <button class="tab-btn"        id="tab-btn-insta"  onclick="switchTab('insta')">📱 인스타 큐</button>
+    <button class="tab-btn active" id="tab-btn-insta"  onclick="switchTab('insta')">📱 인스타 큐</button>
+    <button class="tab-btn"        id="tab-btn-manual" onclick="switchTab('manual')">📸 캡쳐 분석</button>
   </div>
 </header>
 
 <div class="wrap">
 
-  <!-- ══ TAB: 직접 분석 ══════════════════════════════════════ -->
-  <div id="tab-manual">
+  <!-- ══ TAB: 인스타 큐 ══════════════════════════════════════ -->
+  <div id="tab-insta">
 
-    <!-- API 설정 -->
     <div class="card">
-      <div class="card-title">⚙️ API 설정 <span style="font-weight:400;font-size:.78rem;color:var(--muted)">— 모두 선택사항</span></div>
-      <div class="row2">
-        <div class="field">
-          <label>YouTube Data API Key <span style="color:var(--pink-dark)">(영상 설명란 분석용)</span></label>
-          <input type="password" id="ytApiKeyManual" placeholder="AIzaSy..." autocomplete="off" />
-          <p class="hint"><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → YouTube Data API v3 → 무료 발급</p>
-        </div>
-        <div class="field">
-          <label>Gemini API Key <span style="color:var(--green)">(AI 보정용, 무료)</span></label>
-          <input type="password" id="geminiKey" placeholder="AIzaSy..." autocomplete="off" />
-          <p class="hint"><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> → 무료 발급 (하루 1500회)</p>
-        </div>
-      </div>
-      <div class="status info" style="margin-top:.5rem;font-size:.8rem">
-        💡 키 없이도 자막·설명란 키워드로 기본 분석됩니다. Gemini 키 추가 시 정확도가 높아져요.
+      <div class="card-title">📱 인스타그램 큐</div>
+      <p style="font-size:.84rem;color:var(--muted);line-height:1.7">
+        PC에서 <code style="background:#f5f0f5;padding:.1rem .35rem;border-radius:4px">npm run collect:instagram</code> 실행 후 수집된 게시물이 여기 표시됩니다.<br>
+        캡션에서 제품이 자동 추출되고, <strong>가격·링크만 직접 입력</strong>하면 게시물 텍스트가 완성됩니다.
+      </p>
+      <button class="btn btn-primary" style="margin-top:.9rem" onclick="loadInstaQueue()">🔄 큐 불러오기</button>
+
+      <div class="sync-bar">
+        <span class="sync-dot offline" id="syncDot"></span>
+        <span id="syncTxt">오프라인 (localhost만 저장)</span>
+        <span style="color:var(--border)">|</span>
+        <label style="margin:0;font-size:.76rem;font-weight:600;color:var(--muted)">서버:</label>
+        <input class="sync-server-input" id="syncServerUrl" value="http://localhost:3001"
+               placeholder="http://192.168.x.x:3001"
+               onchange="updateServerUrl(this.value)"
+               title="다른 기기에서 접속 시 npm run proxy 실행 PC의 IP 주소 입력">
+        <button onclick="checkSyncServer()" style="font-size:.73rem;padding:.18rem .55rem;border-radius:6px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-weight:700">연결 확인</button>
       </div>
     </div>
 
-    <!-- 영상 입력 -->
-    <div class="card">
-      <div class="card-title">🎬 영상 정보 입력</div>
-      <div class="field">
-        <label>유튜브 영상 링크</label>
-        <input type="url" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." />
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>크리에이터 이름</label>
-          <input type="text" id="creatorName" placeholder="예: 민수" />
-        </div>
-        <div class="field">
-          <label>그룹명 (선택)</label>
-          <input type="text" id="groupName" placeholder="예: 아이브, 뉴진스" />
-        </div>
-      </div>
+    <div id="instaContent"></div>
 
-      <div id="videoPreview" style="display:none"></div>
+  </div><!-- /tab-insta -->
 
-      <details id="transcriptDetails">
-        <summary>자막 직접 붙여넣기 (자동 추출 실패 시 사용)</summary>
-        <div class="detail-body">
-          <textarea id="manualTranscript" rows="7" placeholder="영상 설명란이나 자막 내용을 여기에 붙여넣으세요..."></textarea>
-        </div>
-      </details>
+  <!-- ══ TAB: 캡쳐 분석 ══════════════════════════════════════ -->
+  <div id="tab-manual" style="display:none">
 
-      <div id="statusMsg"></div>
-
-      <button class="btn btn-primary" id="analyzeBtn" onclick="runAnalysis()" style="margin-top:1.1rem">
-        ✨ 분석 시작
-      </button>
-    </div>
-
-    <!-- 이미지 분석 -->
-    <div class="or-divider">또는</div>
     <div class="card">
       <div class="card-title">📸 캡쳐 이미지로 분석</div>
       <p class="hint" style="margin-bottom:1rem;line-height:1.6">
@@ -758,108 +740,22 @@
   </div><!-- /tab-manual -->
 
 
-  <!-- ══ TAB: 오늘의 추천 ═════════════════════════════════════ -->
-  <div id="tab-daily" style="display:none">
-
-    <div class="card">
-      <div class="card-title">📅 오늘의 메이크업 영상 추천</div>
-      <p style="font-size:.84rem;color:var(--muted);line-height:1.6;">
-        매일 오전 9시 KST에 GitHub Actions가 자동으로 국내 메이크업 영상 5개를 선정·분석합니다.<br>
-        영상을 클릭하면 추출된 제품 목록과 게시물 텍스트를 바로 확인할 수 있습니다.
-      </p>
-    </div>
-
-    <!-- 수동 실행 카드 -->
-    <div class="trigger-card">
-      <div class="trigger-top">
-        <div class="card-title" style="margin:0">🔄 지금 바로 분석하기</div>
-        <button class="btn btn-trigger" id="triggerBtn" onclick="runBrowserAnalysis()">▶ 지금 분석 시작</button>
-      </div>
-
-      <p class="hint" style="margin-bottom:.3rem">
-        🔑 YouTube·Gemini 키는 <strong>✍️ 직접 분석</strong> 탭 상단 <strong>API 설정</strong>에서 입력하세요. 한 번만 입력하면 자동 저장됩니다.
-      </p>
-
-      <div id="triggerStatus"></div>
-    </div>
-
-    <div id="dailyContent"></div>
-
-  </div><!-- /tab-daily -->
-
-  <!-- ══ TAB: 인스타 큐 ══════════════════════════════════════ -->
-  <div id="tab-insta" style="display:none">
-
-    <div class="card">
-      <div class="card-title">📱 인스타그램 큐</div>
-      <p style="font-size:.84rem;color:var(--muted);line-height:1.7">
-        PC에서 <code style="background:#f5f0f5;padding:.1rem .35rem;border-radius:4px">npm run collect:instagram</code> 실행 후 수집된 게시물이 여기 표시됩니다.<br>
-        캡션에서 제품이 자동 추출되고, <strong>가격·링크만 직접 입력</strong>하면 게시물 텍스트가 완성됩니다.
-      </p>
-      <button class="btn btn-primary" style="margin-top:.9rem" onclick="loadInstaQueue()">🔄 큐 불러오기</button>
-
-      <div class="sync-bar">
-        <span class="sync-dot offline" id="syncDot"></span>
-        <span id="syncTxt">오프라인 (localhost만 저장)</span>
-        <span style="color:var(--border)">|</span>
-        <label style="margin:0;font-size:.76rem;font-weight:600;color:var(--muted)">서버:</label>
-        <input class="sync-server-input" id="syncServerUrl" value="http://localhost:3001"
-               placeholder="http://192.168.x.x:3001"
-               onchange="updateServerUrl(this.value)"
-               title="다른 기기에서 접속 시 npm run proxy 실행 PC의 IP 주소 입력">
-        <button onclick="checkSyncServer()" style="font-size:.73rem;padding:.18rem .55rem;border-radius:6px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-weight:700">연결 확인</button>
-      </div>
-    </div>
-
-    <div id="instaContent"></div>
-
-  </div><!-- /tab-insta -->
 
 </div><!-- /wrap -->
 
 <script>
 // ══════════════════════════════════════════════════════════════
-//  SHARED CONSTANTS
-// ══════════════════════════════════════════════════════════════
-const PROXY1 = 'https://corsproxy.io/?';
-const PROXY2 = 'https://api.allorigins.win/raw?url=';
-
-// ══════════════════════════════════════════════════════════════
-//  INIT — restore saved settings
+//  INIT
 // ══════════════════════════════════════════════════════════════
 const $id  = id => document.getElementById(id);
 const save = (k,v) => { try { localStorage.setItem(k,v); } catch {} };
 const load = k    => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 
-// GitHub Actions가 주입한 키 우선, 없으면 localStorage
+// GitHub Actions가 주입한 Gemini 키 우선, 없으면 localStorage
 const K = window.__KEYS || {};
-if (K.yt)     save('_mss_ytkey',      K.yt);
-if (K.gemini) save('_mss_geminikey',  K.gemini);
-
-// 저장된 키 복원
-$id('ytApiKeyManual').value = load('_mss_ytkey');
-$id('geminiKey').value      = load('_mss_geminikey');
-
-$id('ytApiKeyManual').addEventListener('input', e => save('_mss_ytkey',      e.target.value));
-$id('geminiKey').addEventListener('input',      e => save('_mss_geminikey',  e.target.value));
-
-// 키가 자동 주입된 경우 안내 표시 (카드는 유지)
-if (K.yt || K.gemini) {
-  const apiCard = $id('ytApiKeyManual').closest('.card');
-  if (apiCard) {
-    const notice = document.createElement('div');
-    notice.className = 'status ok';
-    notice.style.cssText = 'margin-top:.6rem;font-size:.8rem';
-    notice.textContent = '✅ API 키가 서버에서 자동으로 로드됐습니다. 직접 바꾸려면 아래에 입력하세요.';
-    apiCard.appendChild(notice);
-  }
-}
-
-$id('youtubeUrl').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+if (K.gemini) save('_mss_geminikey', K.gemini);
 
 initImageUpload();
-
-let lastTranscript = '';
 
 // ══════════════════════════════════════════════════════════════
 //  브랜드 DB & 카테고리 키워드
@@ -1253,354 +1149,11 @@ async function smartAnalyze(description, transcript, title, channel) {
 //  TAB SWITCHER
 // ══════════════════════════════════════════════════════════════
 function switchTab(name) {
-  ['manual','daily','insta'].forEach(t => {
-    $id(`tab-${t}`).style.display       = t === name ? '' : 'none';
+  ['insta','manual'].forEach(t => {
+    $id(`tab-${t}`).style.display = t === name ? '' : 'none';
     $id(`tab-btn-${t}`).classList.toggle('active', t === name);
   });
-  if (name === 'daily') loadDailyPicks();
-  if (name === 'instagram') loadInstagramQueue();
 }
-
-// ══════════════════════════════════════════════════════════════
-//  DAILY PICKS
-// ══════════════════════════════════════════════════════════════
-let dailyLoaded = false;
-
-async function loadDailyPicks() {
-  if (dailyLoaded) return;
-
-  const el = $id('dailyContent');
-  el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>오늘의 추천 영상 불러오는 중...</div></div>';
-
-  try {
-    const r    = await fetch(`./daily_picks.json?_=${Date.now()}`);
-    const data = await r.json();
-
-    const sections = getDailySections(data);
-    if (!sections.some(section => section.videos.length)) {
-      el.innerHTML = renderEmpty();
-      return;
-    }
-
-    dailyLoaded = true;
-    el.innerHTML = renderDailyPicks(data);
-  } catch (e) {
-    el.innerHTML = renderEmpty();
-  }
-}
-
-function renderEmpty() {
-  return `<div class="card">
-    <div class="empty-state">
-      <div class="big">🌸</div>
-      <p>아직 오늘의 추천 영상이 없습니다.<br>
-      GitHub Actions 설정 후 매일 오전 9시에 자동으로 채워집니다.<br><br>
-      <strong>설정 방법:</strong><br>
-      GitHub 레포 → Settings → Secrets → Actions 에서<br>
-      <code>YOUTUBE_API_KEY</code> 와 <code>ANTHROPIC_API_KEY</code> 를 추가하세요.</p>
-    </div>
-  </div>`;
-}
-
-function getDailySections(data) {
-  if (data.sections) {
-    return [
-      { key:'shorts', label:data.sections.shorts?.label || '숏폼', timeWindow:data.sections.shorts?.timeWindow || data.timeWindow || '', videos:data.sections.shorts?.videos || [] },
-      { key:'longs',  label:data.sections.longs?.label  || '롱폼', timeWindow:data.sections.longs?.timeWindow  || data.timeWindow || '', videos:data.sections.longs?.videos  || [] },
-    ];
-  }
-  return [{ key:'all', label:'전체', timeWindow:data.timeWindow || '', videos:data.videos || [] }];
-}
-
-function renderDailyPicks(data) {
-  const todayKST = new Date().toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'-').replace('.','');
-  const sections = getDailySections(data);
-  const total = sections.reduce((sum, section) => sum + section.videos.length, 0);
-  const activeKey = sections.find(section => section.videos.length)?.key || sections[0]?.key || 'all';
-
-  let html = `<div class="card" style="padding:1rem 1.5rem">
-    <div class="picks-meta">
-      <span class="date-badge">📅 ${data.date || todayKST}</span>
-      <span class="window-badge">추천 ${total}개 영상</span>
-    </div>
-    ${sections.length > 1 ? `<div class="daily-segments">
-      ${sections.map(section => `<button class="daily-segment ${section.key === activeKey ? 'active' : ''}" onclick="showDailySection('${section.key}')">${section.label} ${section.videos.length}</button>`).join('')}
-    </div>` : ''}
-  </div>`;
-
-  sections.forEach(section => {
-    html += `<div class="daily-section ${section.key === activeKey ? 'active' : ''}" id="daily-section-${section.key}">
-      <div class="section-title">${section.label} 추천 <span style="font-weight:600;color:var(--muted)">검색 범위: ${section.timeWindow || ''}</span></div>`;
-    if (!section.videos.length) {
-      html += `<div class="card"><p style="color:var(--muted);text-align:center;padding:.5rem">추천 영상이 없습니다.</p></div></div>`;
-      return;
-    }
-    section.videos.forEach((v, i) => {
-      html += renderDailyPickCard(v, `${section.key}-${i}`);
-    });
-    html += '</div>';
-  });
-
-  return html;
-}
-
-function renderDailyPickCard(v, id) {
-    const views    = v.viewCount ? formatNum(v.viewCount) + ' 조회' : '';
-    const likes    = v.likeCount ? '♥ ' + formatNum(v.likeCount)    : '';
-    const pubAgo   = timeAgo(v.publishedAt);
-    const duration = v.durationText || (v.durationSeconds ? formatDuration(v.durationSeconds) : '');
-    const catTags  = [...new Set(v.products.map(p => p.category))].slice(0,4);
-    const noSub    = !v.transcriptFetched;
-
-    return `<div class="pick-card" id="pick-${id}">
-      <div class="pick-header" onclick="togglePick('${id}')">
-        <img class="pick-thumb" src="${v.thumbnail}" alt="" loading="lazy"
-             onerror="this.style.background='#f0e0ea';this.removeAttribute('src')">
-        <div class="pick-info">
-          <h3>${esc(v.title)}</h3>
-          <div class="ch">${esc(v.channelTitle)}</div>
-          <div class="pick-stats">
-            ${views  ? `<span class="pick-stat">👁 ${views}</span>` : ''}
-            ${likes  ? `<span class="pick-stat">${likes}</span>`    : ''}
-            ${pubAgo ? `<span class="pick-stat">🕐 ${pubAgo}</span>` : ''}
-            ${duration ? `<span class="pick-stat">⏱ ${duration}</span>` : ''}
-          </div>
-          <div class="pick-tags">
-            ${catTags.map(c => `<span class="tag-mini">${c}</span>`).join('')}
-            ${v.products.length ? `<span class="tag-mini">제품 ${v.products.length}개</span>` : ''}
-            ${noSub ? `<span class="no-transcript">자막없음</span>` : ''}
-          </div>
-        </div>
-        <span class="pick-toggle">▼</span>
-      </div>
-
-      <div class="pick-body">
-        <a class="yt-link" href="${v.url}" target="_blank" rel="noopener">
-          ▶ 유튜브에서 보기 — ${esc(v.title)}
-        </a>
-
-        ${v.products.length ? renderMiniTable(v.products) : '<p style="font-size:.85rem;color:var(--muted)">추출된 제품 없음</p>'}
-
-        <div style="margin-top:1rem">
-          <label style="font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:.4rem">📋 게시물 텍스트 (편집 후 복사)</label>
-          <textarea class="pick-output" id="post-${id}" rows="16">${esc(v.postText)}</textarea>
-          <div class="btn-row">
-            <button class="btn btn-sm btn-copy" onclick="copyPick('${id}')">📋 복사</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-function renderMiniTable(products) {
-  let h = `<div class="tbl-wrap"><table>
-    <thead><tr><th>카테고리</th><th>브랜드</th><th>제품명</th><th>호수</th><th>가격</th></tr></thead>
-    <tbody>`;
-  for (const p of products) {
-    h += `<tr>
-      <td><span class="tag">${p.category}</span></td>
-      <td>${esc(p.brand||'—')}</td>
-      <td>${esc(p.name)}</td>
-      <td>${esc(p.shade||'—')}</td>
-      <td>${esc(p.price||'—')}</td>
-    </tr>`;
-  }
-  h += '</tbody></table></div>';
-  return h;
-}
-
-function showDailySection(key) {
-  document.querySelectorAll('.daily-section').forEach(el => el.classList.toggle('active', el.id === `daily-section-${key}`));
-  document.querySelectorAll('.daily-segment').forEach(btn => btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${key}'`)));
-}
-
-function togglePick(id) {
-  const card = $id(`pick-${id}`);
-  card.classList.toggle('open');
-}
-
-function copyPick(id) {
-  const ta  = $id(`post-${id}`);
-  const btn = ta.closest('.pick-body').querySelector('.btn-copy');
-  navigator.clipboard.writeText(ta.value).then(() => {
-    btn.textContent = '✅ 복사됨!';
-    setTimeout(() => { btn.textContent = '📋 복사'; }, 2200);
-  });
-}
-
-function formatDuration(seconds) {
-  seconds = Number(seconds || 0);
-  if (!seconds) return '';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
-}
-
-// ══════════════════════════════════════════════════════════════
-//  INSTAGRAM QUEUE
-// ══════════════════════════════════════════════════════════════
-let instagramLoaded = false;
-
-async function loadInstagramQueue() {
-  if (instagramLoaded) return;
-  const el = $id('instagramContent');
-  el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>인스타 수집함 불러오는 중...</div></div>';
-
-  try {
-    const r = await fetch(`./instagram_queue.json?_=${Date.now()}`);
-    const data = await r.json();
-    instagramLoaded = true;
-    el.innerHTML = renderInstagramQueue(data);
-  } catch {
-    el.innerHTML = renderInstagramEmpty();
-  }
-}
-
-function renderInstagramEmpty() {
-  return `<div class="card">
-    <div class="empty-state">
-      <div class="big">📥</div>
-      <p>아직 수집된 인스타 항목이 없습니다.<br>
-      PC에서 <code>npm run collect:instagram</code> 또는 예약 작업을 실행하면 여기에 쌓입니다.</p>
-    </div>
-  </div>`;
-}
-
-function renderInstagramQueue(data) {
-  const items = data.items || [];
-  if (!items.length) return renderInstagramEmpty();
-
-  const newCount = items.filter(item => (item.status || 'new') === 'new').length;
-  const reelCount = items.filter(item => item.type === 'reel').length;
-  const postCount = items.filter(item => item.type === 'post').length;
-
-  let html = `<div class="card" style="padding:1rem 1.5rem">
-    <div class="picks-meta">
-      <span class="date-badge">📥 수집 ${items.length}개</span>
-      <span class="window-badge">새 항목 ${newCount} · 릴스 ${reelCount} · 게시물 ${postCount}</span>
-    </div>
-    <p class="hint">마지막 수집: ${data.generatedAt ? esc(new Date(data.generatedAt).toLocaleString('ko-KR')) : '아직 없음'}</p>
-  </div>
-  <div class="ig-grid">`;
-
-  items.forEach((item, i) => {
-    const label = item.type === 'reel' ? '릴스' : '게시물';
-    const source = item.sourceLabel || '인스타';
-    const collected = item.collectedAt ? timeAgo(item.collectedAt) : '';
-    html += `<div class="ig-card">
-      <div class="ig-top">
-        <div>
-          <div class="ig-title">${label} ${i + 1}</div>
-          <div class="ig-meta">
-            <span>${esc(source)}</span>
-            ${collected ? `<span>수집 ${collected}</span>` : ''}
-            <span>${esc(item.status || 'new')}</span>
-          </div>
-        </div>
-        <span class="tag-mini">${label}</span>
-      </div>
-      <div class="ig-actions">
-        <a class="ig-link" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
-           onclick="event.preventDefault(); window.open(this.getAttribute('data-url'), '_blank');"
-           title="열리지 않으면: 링크 복사 후 모바일에서 시도 (크롤링 직후 일시 제한)"
-           data-url="${esc(item.url)}">인스타에서 열기</a>
-        <button class="btn btn-sm btn-reset" onclick="copyInstagramLink(${i})">링크 복사</button>
-      </div>
-      <input type="hidden" id="ig-url-${i}" value="${esc(item.url)}">
-    </div>`;
-  });
-
-  return html + '</div>';
-}
-
-function copyInstagramLink(i) {
-  const url = $id(`ig-url-${i}`).value;
-  navigator.clipboard.writeText(url);
-}
-
-// ══════════════════════════════════════════════════════════════
-//  MANUAL ANALYSIS (기존 기능)
-// ══════════════════════════════════════════════════════════════
-function setStatus(html, type = 'info') {
-  const el = $id('statusMsg');
-  el.innerHTML = html ? `<div class="status ${type}">${html}</div>` : '';
-}
-function spin(msg) {
-  setStatus(`<div class="spin-wrap"><div class="spinner"></div>${msg}</div>`);
-}
-
-function extractVideoId(url) {
-  const m = url.match(/(?:v=|\/v\/|youtu\.be\/|\/embed\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
-
-async function proxyFetch(targetUrl, opts = {}) {
-  const sig = AbortSignal.timeout ? AbortSignal.timeout(9000) : undefined;
-  const o   = { ...opts, signal: sig };
-  try {
-    const r = await fetch(PROXY1 + encodeURIComponent(targetUrl), o);
-    if (r.ok) return r;
-  } catch { /* fallthrough */ }
-  return fetch(PROXY2 + encodeURIComponent(targetUrl), o);
-}
-
-async function fetchVideoInfo(videoId) {
-  try {
-    const r = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
-      { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined }
-    );
-    return r.ok ? r.json() : null;
-  } catch { return null; }
-}
-
-async function fetchTranscript(videoId) {
-  for (const lang of ['ko','en']) {
-    for (const extra of ['','&kind=asr']) {
-      try {
-        const r    = await proxyFetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}${extra}&fmt=json3`);
-        const data = await r.json();
-        if (data?.events?.length) {
-          const text = data.events.filter(e=>e.segs).map(e=>e.segs.map(s=>s.utf8||'').join('')).join(' ').trim();
-          if (text.length > 30) return text;
-        }
-      } catch { /* try next */ }
-    }
-  }
-  for (const lang of ['ko','en']) {
-    try {
-      const r   = await proxyFetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}`);
-      const xml = await r.text();
-      if (xml.includes('<text')) {
-        const doc  = new DOMParser().parseFromString(xml,'text/xml');
-        const text = [...doc.querySelectorAll('text')].map(t=>t.textContent).join(' ').trim();
-        if (text.length > 30) return text;
-      }
-    } catch { /* try next */ }
-  }
-  try {
-    const r    = await proxyFetch(`https://www.youtube.com/watch?v=${videoId}`);
-    const html = await r.text();
-    const m    = html.match(/"captionTracks":\s*(\[.*?\])/);
-    if (m) {
-      const tracks = JSON.parse(m[1]);
-      for (const tr of tracks) {
-        if (!tr.baseUrl) continue;
-        try {
-          const cr  = await proxyFetch(tr.baseUrl);
-          const xml = await cr.text();
-          if (xml.includes('<text')) {
-            const doc = new DOMParser().parseFromString(xml,'text/xml');
-            return [...doc.querySelectorAll('text')].map(t=>t.textContent).join(' ').trim();
-          }
-        } catch { /* try next track */ }
-      }
-    }
-  } catch { /* give up */ }
-  return null;
-}
-
 
 function buildPost(products, creatorInfo, hashtags) {
   const byCategory = {};
@@ -1640,85 +1193,6 @@ function renderTable(products) {
   $id('productTable').innerHTML = html;
 }
 
-async function runAnalysis() {
-  const urlVal      = $id('youtubeUrl').value.trim();
-  const creatorName = $id('creatorName').value.trim();
-  const groupName   = $id('groupName').value.trim();
-  const manualText  = $id('manualTranscript').value.trim();
-  const btn         = $id('analyzeBtn');
-
-  if (!urlVal && !manualText) { setStatus('유튜브 URL 또는 자막 내용을 입력해주세요.','err'); return; }
-
-  btn.disabled = true; btn.textContent = '⏳ 분석 중...';
-  $id('resultSection').style.display = 'none';
-  setStatus('');
-
-  try {
-    let transcript = manualText;
-    let description = '';
-    let title = '', channel = '';
-    const creatorInfo = [groupName, creatorName].filter(Boolean).join(' ') || '크리에이터';
-
-    if (urlVal) {
-      const vid = extractVideoId(urlVal);
-      if (!vid) { setStatus('올바른 유튜브 URL을 입력해주세요.','err'); return; }
-
-      spin('영상 정보 가져오는 중...');
-      const info = await fetchVideoInfo(vid);
-      if (info) {
-        title   = info.title;
-        channel = info.author_name;
-        $id('videoPreview').style.display = 'flex';
-        $id('videoPreview').innerHTML = `
-          <img src="${info.thumbnail_url}" alt="썸네일" onerror="this.style.display='none'">
-          <div class="vi"><h3>${esc(info.title)}</h3><p>${esc(info.author_name)}</p></div>`;
-      }
-
-      // 영상 설명란 가져오기 (YouTube API 키 있으면)
-      const ytKey = load('_mss_ytkey');
-      if (ytKey) {
-        try {
-          spin('영상 설명란 분석 중...');
-          const details = await getYouTubeDetails(ytKey, [vid]);
-          description = details[0]?.snippet?.description || '';
-        } catch { /* 없으면 그냥 진행 */ }
-      }
-
-      if (!transcript) {
-        spin('자막 추출 중...');
-        transcript = await fetchTranscript(vid);
-        if (transcript) $id('manualTranscript').value = transcript;
-        else {
-          setStatus('⚠️ 자막 자동 추출 실패 — 아래 "자막 직접 붙여넣기"를 펼쳐 내용을 붙여넣은 후 다시 눌러주세요.','err');
-          $id('transcriptDetails').open = true;
-          return;
-        }
-      }
-    }
-
-    if (!transcript && !description) { setStatus('분석할 내용이 없습니다.','err'); return; }
-    lastTranscript = transcript;
-
-    spin('메이크업 제품 분석 중...');
-    const result   = await smartAnalyze(description, transcript, title, creatorInfo);
-    const products = result.products || [];
-    const hashtags = result.hashtags || [];
-
-    renderTable(products);
-    $id('outputText').value = buildPost(products, creatorInfo, hashtags);
-    $id('resultSection').style.display = 'block';
-    $id('resultSection').scrollIntoView({ behavior:'smooth', block:'start' });
-
-    const method = load('_mss_geminikey') ? 'Gemini AI' : '키워드 분석';
-    setStatus(`✅ 완료! 제품 ${products.length}개 추출됨 (${method}).`, 'ok');
-
-  } catch (err) {
-    setStatus(`❌ ${esc(err.message)}`, 'err');
-  } finally {
-    btn.disabled = false; btn.textContent = '✨ 분석 시작';
-  }
-}
-
 function copyOutput() {
   const text = $id('outputText').value;
   navigator.clipboard.writeText(text).then(() => {
@@ -1729,200 +1203,10 @@ function copyOutput() {
 }
 
 function resetAll() {
-  $id('youtubeUrl').value = '';
-  $id('manualTranscript').value = '';
-  $id('videoPreview').style.display = 'none';
+  uploadedImages = [];
+  renderImagePreviews();
   $id('resultSection').style.display = 'none';
-  setStatus('');
-  lastTranscript = '';
 }
-
-// ══════════════════════════════════════════════════════════════
-//  브라우저 직접 분석 (YouTube API + Claude API)
-// ══════════════════════════════════════════════════════════════
-
-
-function setTriggerStatus(html, type = 'info') {
-  const el = $id('triggerStatus');
-  if (!el) return;
-  el.innerHTML = html ? `<div class="status ${type}">${html}</div>` : '';
-  if (html) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-async function runBrowserAnalysis() {
-  const btn = $id('triggerBtn');
-
-  // 버튼 즉시 비활성화 + 상태 표시 (맨 먼저 실행)
-  btn.disabled = true;
-  btn.textContent = '⏳ 분석 중...';
-  setTriggerStatus('<div class="spin-wrap"><div class="spinner"></div>준비 중...</div>');
-
-  try {
-    const ytKey = load('_mss_ytkey');
-    if (!ytKey) throw new Error('YouTube API 키가 없습니다. ✍️ 직접 분析 탭 → API 설정에서 YouTube Data API Key를 먼저 입력해주세요.');
-
-
-    const sections = {};
-    for (const section of [
-      { key:'shorts', label:'숏폼', durations:['short'] },
-      { key:'longs',  label:'롱폼', durations:['medium','long'] },
-    ]) {
-      const picked = await pickDailyVideos(ytKey, section);
-      const videos = await analyzeDailyVideos(picked.details, section.label);
-      sections[section.key] = {
-        label: section.label,
-        timeWindow: `최근 ${picked.daysBack || 30}일`,
-        videos,
-      };
-    }
-
-    const results = [...sections.shorts.videos, ...sections.longs.videos];
-    if (!results.length) throw new Error('검색 결과가 없습니다. 잠시 후 다시 시도해주세요.');
-
-    // 결과 표시
-    const now  = new Date();
-    const data = {
-      date:        now.toISOString().split('T')[0],
-      generatedAt: now.toISOString(),
-      timeWindow:  '숏폼/롱폼 분리',
-      sections,
-      videos:      results,
-    };
-
-    dailyLoaded = true;
-    $id('dailyContent').innerHTML = renderDailyPicks(data);
-    setTriggerStatus(
-      `✅ 완료! 영상 ${results.length}개 분석됨.
-       <div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div>`,
-      'ok'
-    );
-
-  } catch (err) {
-    setTriggerStatus(`❌ ${esc(err.message)}`, 'err');
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = '▶ 지금 분석 시작';
-  }
-}
-
-async function pickDailyVideos(ytKey, section) {
-  for (const daysBack of [1, 7, 30]) {
-    setTriggerStatus(`<div class="spin-wrap"><div class="spinner"></div>${section.label} 추천 검색 중... (최근 ${daysBack}일)</div>`);
-    const candidates = await searchYouTube(ytKey, daysBack, section.durations);
-    if (!candidates.length) continue;
-
-    const details = await getYouTubeDetails(ytKey, candidates.slice(0, 50));
-    details.sort((a, b) => scoreVideo(b) - scoreVideo(a));
-    const top = details.slice(0, 5);
-    if (top.length >= 5 || daysBack === 30) return { daysBack, details: top };
-  }
-  return { daysBack: 30, details: [] };
-}
-
-async function analyzeDailyVideos(items, sectionLabel) {
-  const results = [];
-  for (let i = 0; i < items.length; i++) {
-    const item    = items[i];
-    const vid     = item.id;
-    const title   = item.snippet.title;
-    const channel = item.snippet.channelTitle;
-    const pct     = Math.round((i / items.length) * 85);
-
-    setTriggerStatus(
-      `<div class="spin-wrap"><div class="spinner"></div>${sectionLabel} (${i + 1}/${items.length}) "${title.slice(0, 28)}..." 분석 중</div>
-       <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`
-    );
-
-    const transcript  = await fetchTranscript(vid);
-    const description = item.snippet?.description || '';
-    const analysis    = await smartAnalyze(description, transcript, title, channel);
-    const post        = buildPost(analysis.products || [], channel, analysis.hashtags || []);
-    const durationSeconds = parseYouTubeDuration(item.contentDetails?.duration);
-
-    results.push({
-      videoId:          vid,
-      title,
-      channelTitle:     channel,
-      thumbnail:        item.snippet.thumbnails?.medium?.url || '',
-      publishedAt:      item.snippet.publishedAt,
-      url:              `https://www.youtube.com/watch?v=${vid}`,
-      durationSeconds,
-      durationText:     formatDuration(durationSeconds),
-      viewCount:        parseInt(item.statistics?.viewCount  || 0),
-      likeCount:        parseInt(item.statistics?.likeCount  || 0),
-      products:         analysis.products  || [],
-      hashtags:         analysis.hashtags  || [],
-      postText:         post,
-      transcriptFetched: !!transcript,
-    });
-  }
-  return results;
-}
-
-async function searchYouTube(ytKey, daysBack, durations = []) {
-  const after   = new Date(Date.now() - daysBack * 86400000).toISOString();
-  const queries = [
-    { q: '메이크업 손민수',           order: 'date'      },
-    { q: '아이돌 메이크업 따라하기',   order: 'viewCount' },
-    { q: '셀럽 메이크업 손민수 제품',  order: 'relevance' },
-    { q: '뷰티 메이크업 신제품 리뷰',  order: 'date'      },
-  ];
-
-  const seen = new Set(), ids = [];
-  for (const { q, order } of queries) {
-    for (const videoDuration of durations.length ? durations : ['']) {
-      try {
-        const params = {
-          key: ytKey, q, type: 'video', part: 'snippet',
-          relevanceLanguage: 'ko', regionCode: 'KR',
-          videoCategoryId: '26', publishedAfter: after,
-          order, maxResults: '15',
-        };
-        if (videoDuration) params.videoDuration = videoDuration;
-        const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams(params));
-        if (!r.ok) {
-          const e = await r.json();
-          throw new Error(e.error?.message || `YouTube API 오류 (${r.status})`);
-        }
-        const data = await r.json();
-        for (const item of data.items || []) {
-          const id = item.id?.videoId;
-          if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
-        }
-      } catch (e) {
-        if (e.message.includes('API') || e.message.includes('key') || e.message.includes('quota')) throw e;
-      }
-    }
-  }
-  return ids;
-}
-
-async function getYouTubeDetails(ytKey, videoIds) {
-  if (!videoIds.length) return [];
-  const r = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({
-    key: ytKey, id: videoIds.join(','), part: 'snippet,statistics,contentDetails',
-  }));
-  if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || 'YouTube API 오류'); }
-  return (await r.json()).items || [];
-}
-
-function scoreVideo(item) {
-  const stats   = item.statistics || {};
-  const views   = parseInt(stats.viewCount || 0);
-  const likes   = parseInt(stats.likeCount || 0);
-  const ageH    = item.snippet?.publishedAt
-    ? (Date.now() - new Date(item.snippet.publishedAt)) / 3600000 : 9999;
-  const recency = Math.max(0.2, 1 - ageH / 168);
-  return (views + likes * 10) * (1 + recency);
-}
-
-function parseYouTubeDuration(duration) {
-  const m = String(duration || '').match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
-  if (!m) return 0;
-  const [, d='0', h='0', min='0', s='0'] = m;
-  return Number(d) * 86400 + Number(h) * 3600 + Number(min) * 60 + Number(s);
-}
-
 
 // ══════════════════════════════════════════════════════════════
 //  IMAGE ANALYSIS
@@ -2332,8 +1616,12 @@ function productRowHTML(cardIdx, pi, p) {
     </div>
     <input type="text" value="${esc(p.shade || '')}" placeholder="호수/색상"
            oninput="updateInstaPost(${cardIdx})" data-field="shade">
-    <input type="text" value="${esc(p.price || '')}" placeholder="가격"
-           oninput="updateInstaPost(${cardIdx})" data-field="price">
+    <div class="price-cell">
+      <input type="text" value="${esc(p.price || '')}" placeholder="가격"
+             oninput="updateInstaPost(${cardIdx})" data-field="price">
+      <button class="btn-oy" onclick="searchOliveYoungPrice(this, ${cardIdx})"
+              title="올리브영 가격 자동 검색">🛒</button>
+    </div>
     <input type="text" value="${esc(p.link || '')}" placeholder="🔗 링크"
            oninput="updateInstaPost(${cardIdx})" data-field="link">
   </div>`;
@@ -2597,6 +1885,127 @@ async function searchAllProductNames(cardIdx) {
   }
 }
 
+// ── 올리브영 가격 검색 (행별 🛒 버튼) ───────────────────────────
+async function _fetchOliveYoungPrice(query) {
+  const r = await fetch(`${_serverUrl}/api/oliveyoung`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined,
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `서버 오류 (${r.status})`);
+  }
+  return r.json();
+}
+
+async function searchOliveYoungPrice(btn, cardIdx) {
+  const row       = btn.closest('.product-edit-row');
+  const nameInput = row.querySelector('[data-field="name"]');
+  const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+  const priceInput= row.querySelector('[data-field="price"]');
+  const query     = [nameInput?.value.trim(), shade].filter(Boolean).join(' ');
+
+  if (!query) {
+    _showLookupToast('제품명을 먼저 입력하세요.', 'info');
+    return;
+  }
+
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳'; btn.disabled = true;
+
+  try {
+    const result = await _fetchOliveYoungPrice(query);
+
+    if (result?.price) {
+      priceInput.value = result.price;
+      priceInput.dispatchEvent(new Event('input'));
+      priceInput.style.transition  = 'border-color .3s';
+      priceInput.style.borderColor = '#f59e0b';
+      setTimeout(() => { priceInput.style.borderColor = ''; }, 3000);
+      btn.innerHTML = '✅';
+      const detail = result.productName ? ` (${result.productName})` : '';
+      _showLookupToast(`🛒 ${result.price}${detail}`, 'ok');
+    } else {
+      priceInput.value = '가격 확인 필요';
+      priceInput.dispatchEvent(new Event('input'));
+      btn.innerHTML = '❓';
+      _showLookupToast(`올리브영에서 "${query}" 을 찾지 못했어요.\n직접 가격을 입력해주세요.`, 'info');
+    }
+  } catch (e) {
+    console.error('[올리브영 검색 실패]', e);
+    btn.innerHTML = '❌';
+    const isProxy = e.message.includes('fetch') || e.message.includes('Failed');
+    _showLookupToast(
+      isProxy
+        ? '프록시 서버가 꺼져 있어요.\n터미널에서 npm run proxy 를 실행해주세요.'
+        : `올리브영 검색 실패: ${e.message}`,
+      'err'
+    );
+  }
+
+  setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3500);
+}
+
+// ── 카드 전체 일괄 올리브영 가격 검색 ─────────────────────────
+async function searchAllOliveYoungPrices(cardIdx) {
+  const allBtn = $id(`insta-oy-all-${cardIdx}`);
+  if (allBtn) { allBtn.disabled = true; allBtn.innerHTML = '⏳ 검색 중…'; }
+
+  const rows = [...document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`)];
+  let found = 0, skipped = 0;
+
+  for (const row of rows) {
+    const nameInput  = row.querySelector('[data-field="name"]');
+    const shade      = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+    const priceInput = row.querySelector('[data-field="price"]');
+    const oyBtn      = row.querySelector('.btn-oy');
+    const curPrice   = priceInput?.value.trim() || '';
+
+    // 이미 가격이 있으면 건너뜀
+    if (curPrice && curPrice !== '가격 확인 필요') { skipped++; continue; }
+
+    const query = [nameInput?.value.trim(), shade].filter(Boolean).join(' ');
+    if (!query) continue;
+
+    if (oyBtn) { oyBtn.innerHTML = '⏳'; oyBtn.disabled = true; }
+
+    try {
+      const result = await _fetchOliveYoungPrice(query);
+      if (result?.price) {
+        priceInput.value = result.price;
+        priceInput.dispatchEvent(new Event('input'));
+        if (oyBtn) oyBtn.innerHTML = '✅';
+        found++;
+      } else {
+        priceInput.value = '가격 확인 필요';
+        priceInput.dispatchEvent(new Event('input'));
+        if (oyBtn) oyBtn.innerHTML = '❓';
+      }
+    } catch (e) {
+      if (oyBtn) oyBtn.innerHTML = '❌';
+      // 프록시 오류면 나머지도 실패하니 즉시 중단
+      if (e.message.includes('fetch') || e.message.includes('Failed')) {
+        _showLookupToast('프록시 서버가 꺼져 있어요.\n터미널에서 npm run proxy 를 실행해주세요.', 'err');
+        break;
+      }
+    }
+
+    setTimeout(() => { if (oyBtn) { oyBtn.innerHTML = '🛒'; oyBtn.disabled = false; } }, 3500);
+  }
+
+  const msg = found > 0
+    ? `✅ ${found}개 가격 완성${skipped ? ` (${skipped}개 이미 입력됨)` : ''}`
+    : skipped > 0 ? `이미 모든 가격이 입력되어 있어요` : `올리브영에서 가격을 찾지 못했어요`;
+  _showLookupToast(msg, found > 0 ? 'ok' : 'info');
+
+  if (allBtn) {
+    allBtn.innerHTML = found ? `✅ ${found}개 완성` : '🛒 올리브영 가격 채우기';
+    setTimeout(() => { allBtn.innerHTML = '🛒 올리브영 가격 채우기'; allBtn.disabled = false; }, 4000);
+  }
+}
+
 function renderInstaCard(item, i, isTodayPick = false) {
   const rawCaption = item.caption || '';
   const cleanedCap = cleanInstagramCaption(rawCaption);
@@ -2655,6 +2064,8 @@ function renderInstaCard(item, i, isTodayPick = false) {
         <button class="btn btn-sm btn-reset" onclick="addProductRow(${i})" style="font-size:.78rem;padding:.3rem .8rem">➕ 행 추가</button>
         <button id="insta-search-all-${i}" class="btn btn-sm" onclick="searchAllProductNames(${i})"
                 style="font-size:.78rem;padding:.3rem .8rem;background:#f5f0ff;border-color:#d8b4fe;color:#7c3aed">🔍 제품명 채우기</button>
+        <button id="insta-oy-all-${i}" class="btn btn-sm" onclick="searchAllOliveYoungPrices(${i})"
+                style="font-size:.78rem;padding:.3rem .8rem;background:#fffbeb;border-color:#fbbf24;color:#92400e">🛒 올리브영 가격 채우기</button>
       </div>
 
       <div style="margin-top:1rem">
