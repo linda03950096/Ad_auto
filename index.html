@@ -1668,13 +1668,22 @@ async function loadInstaQueue() {
       return;
     }
 
-    const visibleItems = items.filter(i => !_queueData[i.id]?.deleted);
+    // 캡션 없는 항목 제거 + 삭제된 항목 제거
+    const visibleItems = items.filter(i =>
+      !_queueData[i.id]?.deleted && (i.caption || i.todayPick)
+    );
 
-    // 날짜별 그룹핑 (collectedAt 기준, 없으면 '날짜미상')
-    const todayKey = new Date().toLocaleDateString('sv'); // "YYYY-MM-DD"
+    // todayPick 15개 항상 최상단, 나머지는 로컬 날짜(KST) 기준 그룹핑
+    const todayPicks  = visibleItems.filter(i => i.todayPick);
+    const otherItems  = visibleItems.filter(i => !i.todayPick && i.caption);
+
+    const todayKey = new Date().toLocaleDateString('sv'); // "YYYY-MM-DD" 로컬 기준
     const byDate = {};
-    visibleItems.forEach(item => {
-      const dk = item.collectedAt ? item.collectedAt.slice(0, 10) : '날짜미상';
+    otherItems.forEach(item => {
+      // UTC → 로컬 날짜 변환 (KST 등 시차 반영)
+      const dk = item.collectedAt
+        ? new Date(item.collectedAt).toLocaleDateString('sv')
+        : '날짜미상';
       (byDate[dk] = byDate[dk] || []).push(item);
     });
     const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
@@ -1688,17 +1697,16 @@ async function loadInstaQueue() {
 
     let cardIdx = 0;
     let cardsHtml = '';
-    for (const dk of sortedDates) {
-      const group = byDate[dk];
-      const isToday = dk === todayKey;
-      const noProductCount = isToday ? group.filter(item =>
+
+    // ── 오늘의 픽 섹션 (항상 최상단) ──
+    if (todayPicks.length) {
+      const noProductCount = todayPicks.filter(item =>
         parseInstagramCaption(item.caption || '').length === 0 &&
         !(_queueData[item.id]?.products?.length)
-      ).length : 0;
-
-      cardsHtml += `<div class="queue-section-header"${cardIdx > 0 ? ' style="margin-top:1.5rem"' : ''}>
-        ${_fmtDate(dk)} <span class="queue-count">${group.length}개</span>
-        ${isToday ? '<span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>' : ''}
+      ).length;
+      cardsHtml += `<div class="queue-section-header">
+        ⭐ 오늘의 픽 <span class="queue-count">${todayPicks.length}개</span>
+        <span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>
         ${noProductCount > 0 ? `
         <button id="btn-ai-enrich" onclick="startAiEnrich(this)"
           style="margin-left:auto;font-size:.76rem;padding:.28rem .7rem;border-radius:8px;
@@ -1706,7 +1714,16 @@ async function loadInstaQueue() {
           ✨ AI 제품 분석 (${noProductCount}개)
         </button>` : ''}
       </div>`;
-      cardsHtml += group.map(item => renderInstaCard(item, cardIdx++, item.todayPick)).join('');
+      cardsHtml += todayPicks.map(item => renderInstaCard(item, cardIdx++, true)).join('');
+    }
+
+    // ── 날짜별 나머지 섹션 ──
+    for (const dk of sortedDates) {
+      const group = byDate[dk];
+      cardsHtml += `<div class="queue-section-header" style="margin-top:1.5rem">
+        ${_fmtDate(dk)} <span class="queue-count">${group.length}개</span>
+      </div>`;
+      cardsHtml += group.map(item => renderInstaCard(item, cardIdx++, false)).join('');
     }
 
     const totalUploaded = visibleItems.filter(it => _queueData[it.id]?.uploaded).length;
