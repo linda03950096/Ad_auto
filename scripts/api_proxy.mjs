@@ -48,7 +48,10 @@ async function _getOyBrowser() {
   const { chromium } = await import('playwright');
   _browser = await chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=ko-KR'],
+    args: [
+      '--no-sandbox', '--disable-setuid-sandbox', '--lang=ko-KR',
+      '--disable-blink-features=AutomationControlled',
+    ],
   });
   _browser.on('disconnected', () => { _browser = null; });
   console.log('🎭 Playwright 브라우저 시작됨');
@@ -77,11 +80,16 @@ function searchOliveYoung(query) {
 }
 
 async function _scrapeOliveYoung(query) {
+  const { default: stealth } = await import('playwright-stealth');
   const browser = await _getOyBrowser();
   const page    = await browser.newPage();
 
   try {
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9' });
+    await stealth(page);   // Cloudflare 봇 감지 우회
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    });
     await page.setViewportSize({ width: 1280, height: 800 });
 
     const searchUrl =

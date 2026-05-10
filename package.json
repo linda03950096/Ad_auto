@@ -5,6 +5,7 @@
     "proxy": "node scripts/api_proxy.mjs"
   },
   "dependencies": {
-    "playwright": "^1.49.1"
+    "playwright": "^1.49.1",
+    "playwright-stealth": "^1.0.0"
   }
 }
