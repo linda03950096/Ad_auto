@@ -1647,8 +1647,17 @@ async function loadInstaQueue() {
   } catch {}
 
   try {
-    const r    = await fetch(`./instagram_queue.json?_=${Date.now()}`);
-    const data = await r.json();
+    // 프록시가 켜져 있으면 로컬 파일 우선 (크롤링 직후 즉시 반영)
+    let data;
+    try {
+      const rProxy = await fetch(`${_serverUrl}/api/instagram-queue`,
+        { signal: AbortSignal.timeout(3000) });
+      if (rProxy.ok) data = await rProxy.json();
+    } catch {}
+    if (!data) {
+      const r = await fetch(`./instagram_queue.json?_=${Date.now()}`);
+      data = await r.json();
+    }
     const items = (data.items || []).filter(i => i.caption || i.url);
 
     if (!items.length) {

@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root      = path.resolve(__dirname, '..');
 const PORT      = 3001;
-const QUEUE_DATA_PATH = path.join(root, 'queue_data.json');
+const QUEUE_DATA_PATH    = path.join(root, 'queue_data.json');
+const INSTAGRAM_QUEUE_PATH = path.join(root, 'instagram_queue.json');
 
 function getLocalIp() {
   const ifaces = os.networkInterfaces();
@@ -221,6 +222,19 @@ const server = http.createServer(async (req, res) => {
     const key = await getGeminiKey();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, keyLoaded: Boolean(key) }));
+    return;
+  }
+
+  // ── 인스타그램 큐 GET (로컬 instagram_queue.json 서빙) ────────
+  if (req.method === 'GET' && req.url === '/api/instagram-queue') {
+    try {
+      const raw = await fs.readFile(INSTAGRAM_QUEUE_PATH, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(raw);
+    } catch {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"items":[]}');
+    }
     return;
   }
 
