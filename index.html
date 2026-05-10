@@ -1737,6 +1737,11 @@ async function loadInstaQueue() {
         <button class="insta-sub-tab" id="subtab-btn-done" onclick="switchInstaSubTab('done')">
           ✅ 업로드 완료 <span class="insta-sub-count" id="subtab-count-done">${totalUploaded}</span>
         </button>
+        <button onclick="deleteNoProductCards()"
+          style="margin-left:auto;font-size:.78rem;padding:.3rem .8rem;border-radius:8px;
+                 border:1.5px solid #fca5a5;background:#fff5f5;color:#dc2626;cursor:pointer;font-weight:600">
+          🗑 제품 없는 항목 삭제
+        </button>
       </div>
       <div id="insta-cards-wrap">${cardsHtml}</div>
       <div id="insta-empty-msg" style="display:none"></div>`;
@@ -2341,6 +2346,31 @@ function deleteInstaCard(cardIdx) {
     _queueData[itemId].deleted = true;
     scheduleQueueSave(itemId);
   }
+  updateSubTabCounts();
+}
+
+// ── 제품 없는 항목 일괄 삭제 ─────────────────────────────────
+function deleteNoProductCards() {
+  const cards = [...document.querySelectorAll('.insta-card')];
+  const targets = cards.filter(card => {
+    if (card.style.display === 'none') return false;
+    const rows = card.querySelectorAll('.product-edit-row');
+    // 행이 없거나, 있어도 이름 입력이 전부 비어있으면 제품 없는 것으로 판단
+    if (!rows.length) return true;
+    return [...rows].every(r => !(r.querySelector('[data-field="name"]')?.value.trim()));
+  });
+  if (!targets.length) { alert('제품 없는 항목이 없습니다.'); return; }
+  if (!confirm(`제품 정보가 없는 항목 ${targets.length}개를 삭제할까요?`)) return;
+
+  targets.forEach(card => {
+    const itemId = card.dataset.itemId;
+    card.remove();
+    if (itemId) {
+      if (!_queueData[itemId]) _queueData[itemId] = {};
+      _queueData[itemId].deleted = true;
+      scheduleQueueSave(itemId);
+    }
+  });
   updateSubTabCounts();
 }
 
