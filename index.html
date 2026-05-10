@@ -1421,6 +1421,48 @@ function getBrandNameList() {
 // INSTA_ACCOUNT_BRANDS 갱신 시 캐시 초기화
 function invalidateBrandCache() { _brandNameList = null; }
 
+// ── 캡션 한 줄에서 제품명/호수 분리 헬퍼 ─────────────────────
+function _splitProductText(productText, catKws) {
+  let name  = productText;
+  let shade = null;
+  let category = '기타';
+
+  // 카테고리 키워드 탐지 (긴 것 우선)
+  for (const kw of catKws) {
+    if (productText.toLowerCase().includes(kw)) {
+      category = INSTA_CAT_KW[kw];
+      break;
+    }
+  }
+
+  // 분리 규칙 ①: 1-2자리 단독 숫자가 있으면 그 앞까지 제품명, 이후 호수
+  // 예: "글래스 앤 하이라이터 03 복숭아 진주" → name="글래스 앤 하이라이터", shade="03 복숭아 진주"
+  const numM = productText.match(/^(.+?)\s+(\d{1,2}(?:\s+.+)?)$/);
+  if (numM) {
+    name  = numM[1].trim();
+    shade = numM[2].trim();
+    return { category, name, shade };
+  }
+
+  // 분리 규칙 ②: 카테고리 키워드 마지막 위치 기준 분리
+  // 예: "러브빔 샤벳 치크 라벤더 토핑" → "치크" 이후 "라벤더 토핑"이 호수
+  if (category !== '기타') {
+    for (const kw of catKws) {
+      if (INSTA_CAT_KW[kw] !== category) continue;
+      const kwIdx = productText.toLowerCase().lastIndexOf(kw);
+      if (kwIdx === -1) continue;
+      const after = productText.slice(kwIdx + kw.length).trim();
+      if (after) {
+        name  = productText.slice(0, kwIdx + kw.length).trim();
+        shade = after;
+      }
+      break;
+    }
+  }
+
+  return { category, name, shade };
+}
+
 function parseInstagramCaption(rawCaption) {
   const caption = cleanInstagramCaption(rawCaption);
   const lines   = caption.split(/\n/).map(l => stripEmoji(l)).filter(Boolean);
@@ -1431,21 +1473,52 @@ function parseInstagramCaption(rawCaption) {
   // 카테고리 키워드 (긴 것 먼저)
   const catKws = Object.keys(INSTA_CAT_KW).sort((a, b) => b.length - a.length);
 
+  // 불릿 문자 제거 정규식
+  const bulletRe = /^[■•\-*▪►▸·◆▶]+\s*/;
+
   for (const line of lines) {
+    const cleanLine = line.replace(bulletRe, '').trim();
+
     // ── @account 로 시작하는 줄 → 컨텍스트 브랜드 설정 후 스킵 ──
-    if (/^@[\w.]+/.test(line)) {
-      const m = line.match(/^@([\w.]+)/);
+    if (/^@[\w.]+/.test(cleanLine)) {
+      const m = cleanLine.match(/^@([\w.]+)/);
       const b = m && INSTA_ACCOUNT_BRANDS[m[1].toLowerCase()];
       if (b) contextBrand = b;
       continue;
     }
 
-    // ── 선행 카테고리 키워드 탐지 ──
-    let category = null, rest = line;
+    // ── 패턴 0: "브랜드명(@handle) 제품텍스트" ──────────────────
+    // 예: "릴리바이레드(@lilybyred_official) 러브빔 샤벳 치크 라벤더 토핑"
+    const p0 = cleanLine.match(/^([가-힣A-Za-z0-9&]+(?:\s[가-힣A-Za-z0-9&]+)*?)\s*\(@[\w.]+\)\s+(.+)$/);
+    if (p0) {
+      const brand       = p0[1].trim();
+      const productText = p0[2].trim();
+      const { category, name, shade } = _splitProductText(productText, catKws);
+      results.push({ category, brand, name, shade, price: null, link: null });
+      continue;
+    }
+
+    // ── 패턴 0b: "알려진브랜드 제품텍스트" (handle 없는 경우) ──
+    // 예: "맥 틴트 셀아웃"
+    let p0bMatched = false;
+    for (const bn of getBrandNameList()) {
+      const lc = cleanLine.toLowerCase();
+      if (!lc.startsWith(bn.toLowerCase())) continue;
+      const productText = cleanLine.slice(bn.length).trim();
+      if (!productText) continue;
+      const { category, name, shade } = _splitProductText(productText, catKws);
+      results.push({ category, brand: bn, name, shade, price: null, link: null });
+      p0bMatched = true;
+      break;
+    }
+    if (p0bMatched) continue;
+
+    // ── 기존 패턴: 카테고리 키워드로 시작하는 줄 ───────────────
+    let category = null, rest = cleanLine;
     for (const kw of catKws) {
-      if (line.toLowerCase().startsWith(kw)) {
+      if (cleanLine.toLowerCase().startsWith(kw)) {
         category = INSTA_CAT_KW[kw];
-        rest     = line.slice(kw.length).trim();
+        rest     = cleanLine.slice(kw.length).trim();
         break;
       }
     }
@@ -1456,15 +1529,12 @@ function parseInstagramCaption(rawCaption) {
     if (/@[\w.]+/.test(rest)) {
       // ── 패턴 1: 카테고리 @brand1 컬러1 @brand2 컬러2 ──
       const parts = rest.split(/@([\w.]+)/);
-      // parts = [before, handle, text, handle, text ...]
       for (let i = 1; i < parts.length; i += 2) {
         const handle    = parts[i];
         const colorText = (parts[i + 1] || '').replace(/[".]/g, '').trim();
         const brand     = INSTA_ACCOUNT_BRANDS[handle.toLowerCase()] || handle;
         if (!colorText) continue;
 
-        // 같은 브랜드에 여러 컬러: "13 분위기 여신 12 개강여신" → 숫자 경계로 분할
-        // 또는 " + " 로 분할
         const shades = colorText.includes('+')
           ? colorText.split(/\s*\+\s*/)
           : colorText.split(/\s+(?=\d+[\s가-힣])/);
@@ -1481,13 +1551,13 @@ function parseInstagramCaption(rawCaption) {
       let shadeText = rest;
 
       if (!brand) {
-        // ── 패턴 3: 텍스트에 직접 브랜드명 (예: "립 어뮤즈 젤핏 글로스 틴트 1호") ──
+        // ── 패턴 3: 텍스트에 직접 브랜드명 ──
         for (const bn of getBrandNameList()) {
           const idx = rest.toLowerCase().indexOf(bn.toLowerCase());
           if (idx === -1) continue;
           brand     = bn;
           shadeText = rest.slice(idx + bn.length).replace(/^[\s\-:·]+/, '').trim();
-          if (!shadeText) shadeText = rest.slice(0, idx).trim();   // 브랜드가 끝에 있는 경우
+          if (!shadeText) shadeText = rest.slice(0, idx).trim();
           break;
         }
       }
@@ -1499,10 +1569,10 @@ function parseInstagramCaption(rawCaption) {
     }
   }
 
-  // 중복 제거 (브랜드+컬러 기준)
+  // 중복 제거 (브랜드+이름 기준)
   const seen = new Set();
   return results.filter(p => {
-    const k = `${p.brand}-${p.shade}`;
+    const k = `${p.brand}-${p.name}-${p.shade}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
@@ -1903,9 +1973,8 @@ async function _fetchOliveYoungPrice(query) {
 async function searchOliveYoungPrice(btn, cardIdx) {
   const row       = btn.closest('.product-edit-row');
   const nameInput = row.querySelector('[data-field="name"]');
-  const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
   const priceInput= row.querySelector('[data-field="price"]');
-  const query     = [nameInput?.value.trim(), shade].filter(Boolean).join(' ');
+  const query     = nameInput?.value.trim() || '';  // 호수 제외, 브랜드+제품명만
 
   if (!query) {
     _showLookupToast('제품명을 먼저 입력하세요.', 'info');
@@ -1958,7 +2027,6 @@ async function searchAllOliveYoungPrices(cardIdx) {
 
   for (const row of rows) {
     const nameInput  = row.querySelector('[data-field="name"]');
-    const shade      = row.querySelector('[data-field="shade"]')?.value.trim() || '';
     const priceInput = row.querySelector('[data-field="price"]');
     const oyBtn      = row.querySelector('.btn-oy');
     const curPrice   = priceInput?.value.trim() || '';
@@ -1966,7 +2034,7 @@ async function searchAllOliveYoungPrices(cardIdx) {
     // 이미 가격이 있으면 건너뜀
     if (curPrice && curPrice !== '가격 확인 필요') { skipped++; continue; }
 
-    const query = [nameInput?.value.trim(), shade].filter(Boolean).join(' ');
+    const query = nameInput?.value.trim() || '';  // 호수 제외, 브랜드+제품명만
     if (!query) continue;
 
     if (oyBtn) { oyBtn.innerHTML = '⏳'; oyBtn.disabled = true; }
