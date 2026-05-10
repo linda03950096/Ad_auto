@@ -1959,9 +1959,9 @@ function cleanInstagramCaption(caption) {
     .trim();
 }
 
-// 캡션 메타에서 작성자 ID 추출
+// 캡션 메타에서 작성자 ID 추출 (21K / 1.2M likes 형식 포함)
 function extractUsernameFromCaption(caption) {
-  const m = caption.match(/^\d[\d,]*\s*likes?[^-]*-\s*([\w.]+)\s*-/);
+  const m = caption.match(/^[\d,.]+[KkMm]?\s*likes?[^-]*-\s*([\w.]+)\s*-/i);
   return m ? m[1] : null;
 }
 
