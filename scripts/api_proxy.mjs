@@ -79,16 +79,42 @@ function searchOliveYoung(query) {
   });
 }
 
+// Cloudflare/봇 감지 우회용 스텔스 스크립트 (외부 패키지 불필요)
+async function _applyStealthToPage(page) {
+  await page.addInitScript(() => {
+    // webdriver 플래그 제거
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // Chrome 객체 모킹
+    window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+    // 플러그인 배열 모킹
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    // 언어 설정
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['ko-KR', 'ko', 'en-US', 'en'],
+    });
+    // permissions API 패치
+    const origQuery = window.navigator.permissions?.query;
+    if (origQuery) {
+      window.navigator.permissions.query = (params) =>
+        params.name === 'notifications'
+          ? Promise.resolve({ state: Notification.permission })
+          : origQuery.call(window.navigator.permissions, params);
+    }
+  });
+}
+
 async function _scrapeOliveYoung(query) {
-  const { default: stealth } = await import('playwright-stealth');
   const browser = await _getOyBrowser();
   const page    = await browser.newPage();
 
   try {
-    await stealth(page);   // Cloudflare 봇 감지 우회
+    await _applyStealthToPage(page);   // Cloudflare 봇 감지 우회
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     await page.setViewportSize({ width: 1280, height: 800 });
 
