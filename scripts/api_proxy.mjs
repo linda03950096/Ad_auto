@@ -135,12 +135,6 @@ async function _scrapeOliveYoung(query) {
     await page.waitForSelector(listSel, { timeout: 10000 }).catch(() => {});
 
     const result = await page.evaluate(() => {
-      // 실제 렌더된 HTML 구조 디버깅
-      const body = document.body.innerHTML;
-      const hasPrdList = body.includes('li_good') || body.includes('prd_li') || body.includes('list_prd');
-      console.log('[OY debug] li_good/prd_li 존재:', hasPrdList);
-
-      // 셀렉터 후보 (여러 패턴 시도)
       const item =
         document.querySelector('#prd-list .li_good') ||
         document.querySelector('.prd-list .li_good')  ||
@@ -150,13 +144,7 @@ async function _scrapeOliveYoung(query) {
         document.querySelector('[class*="prd_li"]')    ||
         document.querySelector('[class*="li_good"]');
 
-      if (!item) {
-        // 못 찾았을 때 — 어떤 li 가 있는지 힌트 출력
-        const lis = [...document.querySelectorAll('li')].slice(0, 5);
-        console.log('[OY debug] li 없음, 샘플 li:', lis.map(l => l.className).join(' | '));
-        return null;
-      }
-      console.log('[OY debug] item.className:', item.className);
+      if (!item) return null;
 
       // 제품명
       const nameEl =
@@ -166,30 +154,48 @@ async function _scrapeOliveYoung(query) {
         item.querySelector('.name')       ||
         item.querySelector('a[class*="name"]');
 
-      // 가격 — 여러 패턴 시도
-      const priceEl =
-        item.querySelector('.prd-price .price strong') ||
-        item.querySelector('.prd-price strong')        ||
-        item.querySelector('.price strong')            ||
-        item.querySelector('.prod_price strong')       ||
-        item.querySelector('.tx-num')                  ||
-        item.querySelector('[class*="price"] strong')  ||
-        item.querySelector('[class*="price"]');
+      // 현재가 추출 — tx-cur(할인가) 먼저, 없으면 단일가
+      let priceDigits = null;
 
-      if (!priceEl) {
-        console.log('[OY debug] priceEl 없음, item HTML:', item.outerHTML.slice(0, 300));
-        return null;
+      // 1순위: .tx-cur 안의 숫자 (할인 적용된 현재가)
+      const txCur = item.querySelector('.tx-cur');
+      if (txCur) {
+        const m = txCur.textContent.replace(/\s+/g, '').match(/[\d,]+/);
+        if (m) priceDigits = m[0];
       }
 
-      const raw    = priceEl.textContent.replace(/\s+/g, '');
-      const digits = raw.match(/[\d,]+/)?.[0];
-      if (!digits) return null;
+      // 2순위: .price-cur, .sale-price 등 다른 현재가 패턴
+      if (!priceDigits) {
+        const altCur = item.querySelector('.price-cur') || item.querySelector('.sale-price') || item.querySelector('[class*="price-cur"]');
+        if (altCur) {
+          const m = altCur.textContent.replace(/\s+/g, '').match(/[\d,]+/);
+          if (m) priceDigits = m[0];
+        }
+      }
+
+      // 3순위: 단일가 상품 (할인 없음) — tx-org 는 제외하고 찾기
+      if (!priceDigits) {
+        const candidates = [
+          '.tx-num', '.price strong', '.prd-price strong',
+          '.prod_price strong', '[class*="price"] strong', '[class*="price"]',
+        ];
+        for (const sel of candidates) {
+          const el = item.querySelector(sel);
+          if (!el) continue;
+          // tx-org(정가/취소선) 안에 있으면 건너뜀
+          if (el.closest('.tx-org')) continue;
+          const m = el.textContent.replace(/\s+/g, '').match(/[\d,]+/);
+          if (m) { priceDigits = m[0]; break; }
+        }
+      }
+
+      if (!priceDigits) return null;
 
       const linkEl = item.querySelector('a[href*="goodsNo"]') || item.querySelector('a');
 
       return {
         productName : (nameEl?.textContent || '').trim(),
-        price       : digits + '원',
+        price       : priceDigits + '원',
         url         : linkEl?.href || '',
       };
     });
