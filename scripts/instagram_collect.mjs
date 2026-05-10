@@ -219,6 +219,10 @@ async function autoDiscoverBrands(page, captions, config) {
 }
 
 // ── 포스트 상세 스크랩 ─────────────────────────────────────
+// 연속 rate-limit 감지 카운터
+let _rateLimitStreak = 0;
+const RATE_LIMIT_BAIL = 3; // 연속 3회 429 → 스크랩 중단
+
 async function enrichPost(page, item) {
   try {
     console.log(`  Enriching: ${item.url}`);
@@ -229,6 +233,15 @@ async function enrichPost(page, item) {
       const meta = (prop) =>
         document.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`)?.getAttribute("content") || "";
 
+      // Rate-limit/로그인 페이지 감지: URL이 바뀌었거나 title이 단순 "Instagram"
+      const currentUrl = location.href;
+      const isRateLimited =
+        !currentUrl.includes("/p/") && !currentUrl.includes("/reel") ||
+        document.title === "Instagram" ||
+        document.title === "페이지를 사용할 수 없음" ||
+        document.body.innerText.includes("Too many requests") ||
+        document.body.innerText.includes("로그인") && document.body.innerText.length < 2000;
+
       let caption = "";
       for (const sel of ["h1", "article div > span > span", "article span"]) {
         const el = document.querySelector(sel);
@@ -236,8 +249,16 @@ async function enrichPost(page, item) {
       }
       if (!caption) caption = meta("og:description");
 
+      // og:title에서 username 추출: "username on Instagram: ..." 또는 "username (@handle) ..."
       const titleMeta = meta("og:title");
-      const username  = titleMeta.match(/@?([\w.]+)/)?.[1] || "";
+      let username = "";
+      const tm1 = titleMeta.match(/^([\w.]+)\s+on Instagram/i);
+      const tm2 = titleMeta.match(/^(.+?)\s*\(@([\w.]+)\)/);
+      if (tm1) username = tm1[1];
+      else if (tm2) username = tm2[2];
+      else username = titleMeta.match(/^@?([\w.]+)/)?.[1] || "";
+      // "Instagram" 단독은 rate-limit 증거
+      if (username.toLowerCase() === "instagram") username = "";
 
       // 게시 날짜
       const timeEl  = document.querySelector("time[datetime]");
@@ -254,11 +275,26 @@ async function enrichPost(page, item) {
         if (m) likeText = m[0];
       }
 
-      return { caption: caption.slice(0, 4000), image: meta("og:image"), username, postedAt, likeText };
+      return { caption: caption.slice(0, 4000), image: meta("og:image"), username, postedAt, likeText, isRateLimited };
     });
 
+    // Rate-limit 감지 시 streak 증가 후 bail-out 체크
+    if (details.isRateLimited) {
+      _rateLimitStreak++;
+      console.warn(`  ⚠️  Rate-limit 감지 (${_rateLimitStreak}/${RATE_LIMIT_BAIL}): ${item.url}`);
+      if (_rateLimitStreak >= RATE_LIMIT_BAIL) {
+        console.error(`  🚫 연속 ${RATE_LIMIT_BAIL}회 rate-limit → 스크랩 중단. 내일 다시 시도하세요.`);
+        return { ...item, status: "rate-limited", rateLimitedAt: nowIso() };
+      }
+      // 10초 대기 후 재시도 없이 enrich-failed로 저장 (다음 실행에서 재시도)
+      await page.waitForTimeout(10000);
+      return { ...item, status: "enrich-failed" };
+    }
+
+    _rateLimitStreak = 0; // 성공하면 streak 초기화
     const likes = parseLikeCount(details.likeText);
-    return { ...item, ...details, likes: likes ?? null, status: "enriched", enrichedAt: nowIso() };
+    const { isRateLimited: _, ...safeDetails } = details;
+    return { ...item, ...safeDetails, likes: likes ?? null, status: "enriched", enrichedAt: nowIso() };
   } catch (e) {
     console.error(`  Enrich failed (${item.url}): ${e.message}`);
     return { ...item, status: "enrich-failed" };
@@ -308,7 +344,7 @@ async function main() {
   const MIN_LIKES        = config.minLikes              ?? 300;
   const BIG_ACCOUNT_THR  = config.bigAccountMinFollowers ?? 30000;
   const DAILY_PICK_COUNT = config.dailyPickCount         ?? 15;
-  const MAX_ENRICH       = config.maxEnrichPerRun        ?? 80;
+  const MAX_ENRICH       = config.maxEnrichPerRun        ?? 30; // 기본 30개 (429 방지)
 
   let pw;
   try { pw = await import("playwright"); }
@@ -347,17 +383,19 @@ async function main() {
     console.log(`\nFound ${added} new post(s). Enriching (max ${MAX_ENRICH})...`);
 
     // 2단계: 새 포스트 상세 스크랩 (최대 MAX_ENRICH개)
+    // 요청 간격: 3~5초 랜덤 (rate-limit 방지)
+    const enrichDelay = () => new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
     let enrichCount = 0;
+    let bailOut = false;
     for (const [key, item] of existing) {
-      if (item.status !== "new") continue;
-      if (enrichCount >= MAX_ENRICH) {
-        existing.delete(key); // 이번 런에 처리 못한 항목은 다음 런에 처리
-        continue;
-      }
+      if (bailOut) break;
+      if (item.status !== "new" && item.status !== "enrich-failed") continue;
+      if (enrichCount >= MAX_ENRICH) break;
       const enriched = await enrichPost(page, item);
       existing.set(key, enriched);
       enrichCount++;
-      await new Promise(r => setTimeout(r, 1500));
+      if (enriched.status === "rate-limited") { bailOut = true; break; }
+      await enrichDelay();
     }
 
     // 2.5단계: 미등록 브랜드 이름 자동 수집

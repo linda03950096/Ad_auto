@@ -1397,6 +1397,7 @@ function renderInstagramQueue(data) {
       <div class="ig-actions">
         <a class="ig-link" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
            onclick="event.preventDefault(); window.open(this.getAttribute('data-url'), '_blank');"
+           title="열리지 않으면: 링크 복사 후 모바일에서 시도 (크롤링 직후 일시 제한)"
            data-url="${esc(item.url)}">인스타에서 열기</a>
         <button class="btn btn-sm btn-reset" onclick="copyInstagramLink(${i})">링크 복사</button>
       </div>
@@ -1959,10 +1960,16 @@ function cleanInstagramCaption(caption) {
     .trim();
 }
 
-// 캡션 메타에서 작성자 ID 추출 (21K / 1.2M likes 형식 포함)
+// 캡션 메타에서 작성자 ID 추출 (21K / 1.2M likes 형식 + "username - date:" 형식 포함)
 function extractUsernameFromCaption(caption) {
-  const m = caption.match(/^[\d,.]+[KkMm]?\s*likes?[^-]*-\s*([\w.]+)\s*-/i);
-  return m ? m[1] : null;
+  if (!caption) return null;
+  // 패턴 1: "48 likes, 3 comments - username - February 21, 2026:"
+  const m1 = caption.match(/^[\d,.]+[KkMm]?\s*likes?[^-]*-\s*([\w.]+)\s*-/i);
+  if (m1) return m1[1];
+  // 패턴 2: "username - May 5, 2026:" (좋아요 수 없는 형식)
+  const m2 = caption.match(/^([\w.]+)\s*-\s*\w+ \d+, \d{4}[:\"]/);
+  if (m2) return m2[1];
+  return null;
 }
 
 // 인스타그램 캡션 전용 파서 ─ API 불필요
@@ -2189,6 +2196,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
           ${item.likes ? `<span class="pick-stat">❤️ ${item.likes.toLocaleString()}</span>` : ''}
           <a href="${esc(item.url)}" data-url="${esc(item.url)}" target="_blank" rel="noopener noreferrer"
              onclick="event.stopPropagation(); event.preventDefault(); window.open(this.getAttribute('data-url'), '_blank');"
+             title="열리지 않으면: 링크 복사 후 모바일에서 시도하세요 (크롤링 후 일시적 제한)"
              style="font-size:.75rem;color:var(--blue);text-decoration:none">▶ 인스타에서 보기</a>
         </div>
       </div>
