@@ -1404,9 +1404,33 @@ const INSTA_CAT_NAME = {
   '기타':'기타','베이스/프라이머':'프라이머',
 };
 
+// 카테고리 키워드 뒤에 나와도 제품명의 일부인 수식어
+const PRODUCT_SUFFIXES = new Set([
+  '픽서','픽스','워터프루프','프루프','롱래스팅','롱키핑','롱웨어',
+  '볼류밍','볼륨','커링','컬링','빅아이','슬림','글로우','라이트',
+  '멀티','듀얼','슈퍼','핀','스키니','매트','글로시','샤이니',
+  '내추럴','세미','딥','풀','파워','인텐스','클리어','소프트',
+  '플러스','엑스트라','펄','글리터','크리미','쉬머','매직',
+  '스무스','실키','퍼펙트','젤','크림','리퀴드','스틱','타투',
+  '미라클','이지','마이크로','나노','스킨핏','세럼','에센스',
+  '벨벳','새틴','쉬폰','글래스','에어','커버','미스트',
+  'waterproof','proof','longwear','volume','slim','matte','glossy',
+  'natural','deep','full','power','intense','clear','soft','extra',
+  'gel','cream','liquid','stick','tattoo','magic','silky','perfect',
+]);
+
+// 카테고리 병합 — post 출력 시에만 사용
+const EYE_CATS  = new Set(['마스카라','아이라이너','아이섀도우','아이브로우']);
+const BASE_CATS = new Set(['쿠션','파운데이션','컨실러','베이스/프라이머']);
+function _displayCat(cat) {
+  if (EYE_CATS.has(cat))  return '아이메이크업';
+  if (BASE_CATS.has(cat)) return '베이스';
+  return cat;
+}
+
 // 이모지·특수문자 제거
 function stripEmoji(str) {
-  return str.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}✨✅🤍🍑👍💄💗🌸🌼🎉⭐🫧]/gu, '').trim();
+  return str.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}▫️✨✅🤍🍑👍💄💗🌸🌼🎉⭐🫧]/gu, '').trim();
 }
 
 // 패턴3용: INSTA_ACCOUNT_BRANDS 값(한국어 브랜드명) 역방향 목록 (긴 것 먼저)
@@ -1445,7 +1469,9 @@ function _splitProductText(productText, catKws) {
   }
 
   // 분리 규칙 ②: 카테고리 키워드 마지막 위치 기준 분리
-  // 예: "러브빔 샤벳 치크 라벤더 토핑" → "치크" 이후 "라벤더 토핑"이 호수
+  // PRODUCT_SUFFIXES 단어는 카테고리 키워드 뒤여도 제품명에 포함
+  // 예: "닥터 마스카라 픽서 브라운" → name="닥터 마스카라 픽서", shade="브라운"
+  // 예: "러브빔 샤벳 치크 라벤더 토핑" → name="러브빔 샤벳 치크", shade="라벤더 토핑"
   if (category !== '기타') {
     for (const kw of catKws) {
       if (INSTA_CAT_KW[kw] !== category) continue;
@@ -1453,8 +1479,16 @@ function _splitProductText(productText, catKws) {
       if (kwIdx === -1) continue;
       const after = productText.slice(kwIdx + kw.length).trim();
       if (after) {
-        name  = productText.slice(0, kwIdx + kw.length).trim();
-        shade = after;
+        const afterWords = after.split(/\s+/);
+        let suffixEnd = 0;
+        for (let i = 0; i < afterWords.length; i++) {
+          if (PRODUCT_SUFFIXES.has(afterWords[i].toLowerCase())) suffixEnd = i + 1;
+          else break;
+        }
+        const extraName  = afterWords.slice(0, suffixEnd).join(' ');
+        const shadeWords = afterWords.slice(suffixEnd).join(' ').trim();
+        name  = productText.slice(0, kwIdx + kw.length).trim() + (extraName ? ' ' + extraName : '');
+        shade = shadeWords || null;
       }
       break;
     }
@@ -1474,7 +1508,7 @@ function parseInstagramCaption(rawCaption) {
   const catKws = Object.keys(INSTA_CAT_KW).sort((a, b) => b.length - a.length);
 
   // 불릿 문자 제거 정규식
-  const bulletRe = /^[■•\-*▪►▸·◆▶]+\s*/;
+  const bulletRe = /^[■•\-*▪►▸·◆▶▫▫️]+\s*/;
 
   for (const line of lines) {
     const cleanLine = line.replace(bulletRe, '').trim();
@@ -2482,8 +2516,8 @@ async function enrichTodayPicksWithGemini(geminiKey) {
   return done;
 }
 
-// 카테고리 표시 순서
-const INSTA_CATEGORY_ORDER = ['아이섀도우', '블러셔', '하이라이터', '립'];
+// 카테고리 표시 순서 (병합된 카테고리 기준)
+const INSTA_CATEGORY_ORDER = ['블러셔', '아이메이크업', '베이스', '하이라이터', '컨투어/쉐딩', '세팅파우더/픽서', '립', '기타'];
 
 // 인스타 게시물 포맷 빌드
 function buildInstaPost(products, authorId, extraHashtags) {
@@ -2500,10 +2534,11 @@ function buildInstaPost(products, authorId, extraHashtags) {
     return true;
   });
 
-  // 카테고리별 그룹
+  // 카테고리별 그룹 (아이/베이스 계열 병합)
   const byCategory = {};
   for (const p of unique) {
-    (byCategory[p.category] = byCategory[p.category] || []).push(p);
+    const dc = _displayCat(p.category);
+    (byCategory[dc] = byCategory[dc] || []).push(p);
   }
 
   // 지정 순서 → 나머지
@@ -2516,8 +2551,11 @@ function buildInstaPost(products, authorId, extraHashtags) {
   for (const cat of orderedCats) {
     out += `\n♡ ${cat}\n`;
     for (const p of byCategory[cat]) {
-      const name  = [p.brand, p.name].filter(Boolean).join(' ');
-      const shade = p.shade ? ` #${p.shade.replace(/^#/, '')}` : '';
+      const name     = [p.brand, p.name].filter(Boolean).join(' ');
+      const shadeStr = p.shade
+        ? p.shade.split(/,\s*/).map(s => `#${s.replace(/^#/, '').trim()}`).join(' ')
+        : '';
+      const shade = shadeStr ? ` ${shadeStr}` : '';
       const price = p.price ? `/ ${p.price}` : '/ 원';
       const link  = p.link  ? `🔗 ${p.link}` : '🔗';
       out += `${name}${shade} ${price}\n${link}\n\n`;
