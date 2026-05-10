@@ -440,8 +440,21 @@
       padding-right: 1.4rem;
     }
     .product-edit-add {
-      margin-top: .4rem;
+      margin-top: .4rem; display: flex; gap: .5rem; flex-wrap: wrap;
     }
+    /* 제품명 셀: input + 🔍 버튼 나란히 */
+    .product-name-cell {
+      display: flex; gap: .25rem; align-items: center;
+    }
+    .product-name-cell input { flex: 1; min-width: 0; }
+    .btn-lookup {
+      flex-shrink: 0; border: 1.5px solid #d8b4fe; background: #f5f0ff;
+      border-radius: 7px; padding: .3rem .45rem; font-size: .8rem;
+      cursor: pointer; transition: background .15s, border-color .15s;
+      white-space: nowrap; line-height: 1;
+    }
+    .btn-lookup:hover:not(:disabled) { background: #ede5ff; border-color: #c084fc; }
+    .btn-lookup:disabled { opacity: .45; cursor: not-allowed; }
     .product-edit-header {
       display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
@@ -2185,8 +2198,12 @@ function productRowHTML(cardIdx, pi, p) {
   const nameVal = p.brand ? `${p.brand} ${p.name}` : (p.name || '');
   return `<div class="product-edit-row" id="insta-${cardIdx}-row-${pi}">
     <select oninput="updateInstaPost(${cardIdx})" data-field="category">${opts}</select>
-    <input type="text" value="${esc(nameVal)}" placeholder="브랜드 제품명"
-           oninput="updateInstaPost(${cardIdx})" data-field="name">
+    <div class="product-name-cell">
+      <input type="text" value="${esc(nameVal)}" placeholder="브랜드 제품명"
+             oninput="updateInstaPost(${cardIdx})" data-field="name">
+      <button class="btn-lookup" onclick="searchProductName(this, ${cardIdx})"
+              title="구글 검색으로 정확한 제품명 찾기">🔍</button>
+    </div>
     <input type="text" value="${esc(p.shade || '')}" placeholder="호수/색상"
            oninput="updateInstaPost(${cardIdx})" data-field="shade">
     <input type="text" value="${esc(p.price || '')}" placeholder="가격"
@@ -2204,6 +2221,166 @@ function addProductRow(cardIdx) {
   if (!rowsEl.previousElementSibling?.classList?.contains('product-edit-header')) {
     rowsEl.insertAdjacentHTML('beforebegin',
       `<div class="product-edit-header"><span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span></div>`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  제품명 정밀 검색 (Gemini + Google Search 그라운딩)
+// ══════════════════════════════════════════════════════════════
+
+// 3초 간격 쿼터 제한
+let _lastLookupMs = 0;
+async function _throttleLookup() {
+  const wait = 3000 - (Date.now() - _lastLookupMs);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _lastLookupMs = Date.now();
+}
+
+// 제품명이 불완전한지 판단 (카테고리 단어만 있거나 비어있을 때)
+const _GENERIC_NAMES = new Set([
+  '틴트','립틴트','립스틱','립글로스','립밤','립','쿠션','파운데이션','컨실러',
+  '블러셔','블러쉬','치크','섀도우','아이섀도우','팔레트','마스카라','아이라이너',
+  '라이너','하이라이터','컨투어','쉐딩','프라이머','베이스','파우더',
+  'tint','cushion','foundation','concealer','blush','shadow','palette',
+  'mascara','liner','highlighter','contour','primer','powder','lip',
+]);
+function isIncomplete(name) {
+  if (!name || name.trim().length < 2) return true;
+  const lo = name.toLowerCase().trim();
+  // 단어 2개 이하이고 마지막 단어가 카테고리 단어인 경우
+  const words = lo.split(/\s+/);
+  return words.length <= 2 && _GENERIC_NAMES.has(words[words.length - 1]);
+}
+
+// Gemini API 호출 (그라운딩 지원 시도 → 폴백: 지식 기반)
+async function lookupProductName(nameOrBrand, shade, category) {
+  await _throttleLookup();
+
+  const searchHint = [nameOrBrand, shade].filter(Boolean).join(' ');
+  const prompt = `한국 화장품 제품의 정확한 제품 라인명을 찾아줘.
+
+입력 정보:
+- 브랜드/현재값: "${nameOrBrand}"
+- 색상/호수: "${shade}"
+- 카테고리: "${category}"
+
+"${searchHint}" 키워드로 구글에서 검색해서 정확한 제품명을 알아내줘.
+
+예시:
+- 에뛰드 + 뮤심한베이지 + 립 → "이더앤 듀이 시럽 틴트"
+- 롬앤 + 00레드 + 립 → "제로 매트 립스틱"
+- 클리오 + 브라운 + 아이라이너 → "킬 블랙 퍼펙트 라이너"
+
+규칙: 제품 라인명만 한 줄로 답해. 브랜드명 제외, 색상명 제외.
+찾지 못했으면 "unknown"만 답해.`;
+
+  const makeBody = (useGrounding) => JSON.stringify({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    ...(useGrounding ? { tools: [{ google_search: {} }] } : {}),
+    generationConfig: { maxOutputTokens: 80, temperature: 0.1 },
+  });
+
+  const doFetch = async (body) => {
+    const geminiKey = load('_mss_geminikey');
+    try {
+      const r = await fetch('http://localhost:3001/api/gemini', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      });
+      if (r.ok || r.status === 400) return r; // 400은 그라운딩 미지원일 수 있음
+    } catch {}
+    if (!geminiKey) throw new Error('프록시 꺼져있고 키도 없음');
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
+    );
+  };
+
+  // 1차: 구글 검색 그라운딩
+  let r = await doFetch(makeBody(true));
+  // 400(그라운딩 미지원) 또는 실패 시 폴백: 지식 기반
+  if (!r.ok) r = await doFetch(makeBody(false));
+  if (!r.ok) throw new Error(`Gemini API ${r.status}`);
+
+  const data = await r.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+  if (!text || /unknown/i.test(text)) return null;
+  // 첫 줄만, 따옴표·마크다운 기호 제거
+  return text.split('\n')[0].trim().replace(/^["'`\-*#\s]+|["'`\-*\s]+$/g, '') || null;
+}
+
+// 행별 🔍 버튼 클릭 핸들러
+async function searchProductName(btn, cardIdx) {
+  const row       = btn.closest('.product-edit-row');
+  const nameInput = row.querySelector('[data-field="name"]');
+  const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+  const category  = row.querySelector('[data-field="category"]')?.value || '';
+  const curName   = nameInput.value.trim();
+
+  if (!curName && !shade) { alert('제품명이나 색상을 먼저 입력하세요.'); return; }
+
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳'; btn.disabled = true;
+  try {
+    const found = await lookupProductName(curName, shade, category);
+    if (found && found !== curName) {
+      nameInput.value = found;
+      nameInput.dispatchEvent(new Event('input'));
+      nameInput.style.borderColor = 'var(--green)';
+      setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
+      btn.innerHTML = '✅';
+    } else {
+      btn.innerHTML = '❓'; // 결과 없음
+    }
+  } catch (e) {
+    console.error('제품명 검색 실패:', e);
+    btn.innerHTML = '❌';
+  }
+  setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+}
+
+// 카드 전체: 불완전한 행 일괄 검색
+async function searchAllProductNames(cardIdx) {
+  const btn = $id(`insta-search-all-${cardIdx}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '🔍 검색 중…'; }
+
+  const rows = [...document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`)];
+  let found = 0;
+
+  for (const row of rows) {
+    const nameInput = row.querySelector('[data-field="name"]');
+    const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+    const category  = row.querySelector('[data-field="category"]')?.value || '';
+    const curName   = nameInput?.value.trim() || '';
+
+    if (!isIncomplete(curName) && curName) continue; // 이미 완성된 제품명은 스킵
+
+    const lookupBtn = row.querySelector('.btn-lookup');
+    if (lookupBtn) { lookupBtn.innerHTML = '⏳'; lookupBtn.disabled = true; }
+
+    try {
+      const result = await lookupProductName(curName, shade, category);
+      if (result) {
+        nameInput.value = result;
+        nameInput.dispatchEvent(new Event('input'));
+        nameInput.style.borderColor = 'var(--green)';
+        setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
+        if (lookupBtn) lookupBtn.innerHTML = '✅';
+        found++;
+      } else {
+        if (lookupBtn) lookupBtn.innerHTML = '❓';
+      }
+    } catch {
+      if (lookupBtn) { lookupBtn.innerHTML = '❌'; }
+    }
+    setTimeout(() => {
+      if (lookupBtn && !lookupBtn.disabled) return;
+      if (lookupBtn) { lookupBtn.innerHTML = '🔍'; lookupBtn.disabled = false; }
+    }, 3000);
+  }
+
+  if (btn) {
+    btn.innerHTML = found ? `✅ ${found}개 완성` : '🔍 제품명 채우기';
+    setTimeout(() => { btn.innerHTML = '🔍 제품명 채우기'; btn.disabled = false; }, 3000);
   }
 }
 
@@ -2250,6 +2427,8 @@ function renderInstaCard(item, i, isTodayPick = false) {
       <div id="insta-products-${i}">${productRows}</div>
       <div class="product-edit-add">
         <button class="btn btn-sm btn-reset" onclick="addProductRow(${i})" style="font-size:.78rem;padding:.3rem .8rem">➕ 행 추가</button>
+        <button id="insta-search-all-${i}" class="btn btn-sm" onclick="searchAllProductNames(${i})"
+                style="font-size:.78rem;padding:.3rem .8rem;background:#f5f0ff;border-color:#d8b4fe;color:#7c3aed">🔍 제품명 채우기</button>
       </div>
 
       <div style="margin-top:1rem">
