@@ -1894,12 +1894,12 @@ async function lookupProductName(nameOrBrand, shade, category) {
     `  - 확실하지 않으면 "unknown"\n` +
     `  - 다른 설명 없이 제품명만 출력`;
 
-  // 시도 순서: ① googleSearch 그라운딩 ② google_search 그라운딩 ③ 지식 기반
+  // 시도 순서: ① 지식기반(빠름) ② googleSearch 그라운딩 ③ google_search 그라운딩
   // 단, 429(한도 초과) 시 즉시 중단 — 추가 호출해봤자 모두 실패
   const attempts = [
+    { label: '지식기반' },
     { tools: [{ googleSearch: {} }], label: 'googleSearch' },
     { tools: [{ google_search: {} }], label: 'google_search' },
-    { label: '지식기반' },
   ];
 
   for (const { label, ...extra } of attempts) {
@@ -2007,46 +2007,49 @@ async function searchAllProductNames(cardIdx) {
   const rows = [...document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`)];
   let found = 0, total = 0;
 
-  for (const row of rows) {
-    const nameInput = row.querySelector('[data-field="name"]');
-    const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
-    const category  = row.querySelector('[data-field="category"]')?.value || '';
-    const curName   = nameInput?.value.trim() || '';
+  try {
+    for (const row of rows) {
+      const nameInput = row.querySelector('[data-field="name"]');
+      const shade     = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+      const category  = row.querySelector('[data-field="category"]')?.value || '';
+      const curName   = nameInput?.value.trim() || '';
 
-    if (!isIncomplete(curName) && curName) continue;
-    total++;
+      if (!isIncomplete(curName) && curName) continue;
+      total++;
 
-    const lb = row.querySelector('.btn-lookup');
-    if (lb) { lb.innerHTML = '⏳'; lb.disabled = true; }
+      const lb = row.querySelector('.btn-lookup');
+      if (lb) { lb.innerHTML = '⏳'; lb.disabled = true; }
 
-    try {
-      const result = await lookupProductName(curName, shade, category);
-      if (result) {
-        nameInput.value = result;
-        nameInput.dispatchEvent(new Event('input'));
-        nameInput.style.borderColor = 'var(--green)';
-        setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
-        if (lb) lb.innerHTML = '✅';
-        found++;
-      } else {
-        if (lb) lb.innerHTML = '❓';
+      try {
+        const result = await lookupProductName(curName, shade, category);
+        if (result) {
+          nameInput.value = result;
+          nameInput.dispatchEvent(new Event('input'));
+          nameInput.style.borderColor = 'var(--green)';
+          setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
+          if (lb) lb.innerHTML = '✅';
+          found++;
+        } else {
+          if (lb) lb.innerHTML = '❓';
+        }
+      } catch (e) {
+        if (lb) lb.innerHTML = '❌';
+        if (e.code === 'NO_KEY' || e.code === 'RATE_LIMIT') {
+          _showLookupToast(e.message, 'err');
+          break;
+        }
       }
-    } catch (e) {
-      if (lb) lb.innerHTML = '❌';
-      if (e.code === 'NO_KEY') {
-        _showLookupToast(e.message, 'err');
-        break; // 키 없으면 나머지 행도 안 되니 중단
-      }
+      setTimeout(() => { if (lb) { lb.innerHTML = '🔍'; lb.disabled = false; } }, 3500);
     }
-    setTimeout(() => { if (lb) { lb.innerHTML = '🔍'; lb.disabled = false; } }, 3500);
-  }
 
-  const msg = total === 0 ? '완성된 제품명만 있어요' :
-              found > 0   ? `✅ ${found}/${total}개 완성` : `검색 결과 없음 (직접 입력해주세요)`;
-  _showLookupToast(msg, found > 0 ? 'ok' : 'info');
-  if (allBtn) {
-    allBtn.innerHTML = found ? `✅ ${found}개 완성` : '🔍 제품명 채우기';
-    setTimeout(() => { allBtn.innerHTML = '🔍 제품명 채우기'; allBtn.disabled = false; }, 3500);
+    const msg = total === 0 ? '완성된 제품명만 있어요' :
+                found > 0   ? `✅ ${found}/${total}개 완성` : `검색 결과 없음 (직접 입력해주세요)`;
+    _showLookupToast(msg, found > 0 ? 'ok' : 'info');
+  } finally {
+    if (allBtn) {
+      allBtn.innerHTML = found ? `✅ ${found}개 완성` : '🔍 제품명 채우기';
+      setTimeout(() => { allBtn.innerHTML = '🔍 제품명 채우기'; allBtn.disabled = false; }, 3500);
+    }
   }
 }
 
