@@ -1998,6 +1998,18 @@ function stripEmoji(str) {
   return str.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}✨✅🤍🍑👍💄💗🌸🌼🎉⭐🫧]/gu, '').trim();
 }
 
+// 패턴3용: INSTA_ACCOUNT_BRANDS 값(한국어 브랜드명) 역방향 목록 (긴 것 먼저)
+let _brandNameList = null;
+function getBrandNameList() {
+  if (_brandNameList) return _brandNameList;
+  const seen = new Set();
+  _brandNameList = [...new Set(Object.values(INSTA_ACCOUNT_BRANDS))]
+    .sort((a, b) => b.length - a.length);
+  return _brandNameList;
+}
+// INSTA_ACCOUNT_BRANDS 갱신 시 캐시 초기화
+function invalidateBrandCache() { _brandNameList = null; }
+
 function parseInstagramCaption(rawCaption) {
   const caption = cleanInstagramCaption(rawCaption);
   const lines   = caption.split(/\n/).map(l => stripEmoji(l)).filter(Boolean);
@@ -2053,11 +2065,26 @@ function parseInstagramCaption(rawCaption) {
         }
       }
     } else {
-      // ── 패턴 2/3: 카테고리 컬러명 (컨텍스트 브랜드 사용) ──
-      if (!contextBrand) continue;
-      const shades = rest.split(/\s*\+\s*/).map(s => s.replace(/[".]/g, '').trim()).filter(s => s && s.length < 30);
+      // ── 패턴 2: 컨텍스트 브랜드 사용 ──
+      let brand     = contextBrand;
+      let shadeText = rest;
+
+      if (!brand) {
+        // ── 패턴 3: 텍스트에 직접 브랜드명 (예: "립 어뮤즈 젤핏 글로스 틴트 1호") ──
+        for (const bn of getBrandNameList()) {
+          const idx = rest.toLowerCase().indexOf(bn.toLowerCase());
+          if (idx === -1) continue;
+          brand     = bn;
+          shadeText = rest.slice(idx + bn.length).replace(/^[\s\-:·]+/, '').trim();
+          if (!shadeText) shadeText = rest.slice(0, idx).trim();   // 브랜드가 끝에 있는 경우
+          break;
+        }
+      }
+
+      if (!brand || !shadeText) continue;
+      const shades = shadeText.split(/\s*\+\s*/).map(s => s.replace(/[".]/g, '').trim()).filter(s => s && s.length < 40);
       for (const shade of shades)
-        results.push({ category, brand: contextBrand, name: productName, shade: shade || null, price: null, link: null });
+        results.push({ category, brand, name: productName, shade: shade || null, price: null, link: null });
     }
   }
 
@@ -2075,10 +2102,10 @@ async function loadInstaQueue() {
   const el = $id('instaContent');
   el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>큐 불러오는 중...</div></div>';
 
-  // 크롤러가 수집한 미등록 브랜드 캐시 병합
+  // 크롤러가 수집한 미등록 브랜드 캐시 병합 (패턴3 캐시도 리셋)
   try {
     const cr = await fetch(`./instagram_brands_cache.json?_=${Date.now()}`);
-    if (cr.ok) Object.assign(INSTA_ACCOUNT_BRANDS, await cr.json());
+    if (cr.ok) { Object.assign(INSTA_ACCOUNT_BRANDS, await cr.json()); invalidateBrandCache(); }
   } catch {}
 
   try {
@@ -2112,6 +2139,11 @@ async function loadInstaQueue() {
       html += olderItems.map((item, i) => renderInstaCard(item, todayPicks.length + i, false)).join('');
     }
     el.innerHTML = html || '<div class="status warn">게시물 없음</div>';
+
+    // Gemini 자동 분석: 오늘의픽 중 제품 못 찾은 카드
+    const geminiKey = load('_mss_geminikey');
+    if (geminiKey) enrichTodayPicksWithGemini(geminiKey);
+
   } catch {
     el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
   }
@@ -2124,7 +2156,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
   const preview    = cleanedCap.slice(0, 120).replace(/\n/g, ' ');
   const authorId   = extractUsernameFromCaption(rawCaption) || item.username || '크리에이터';
   const ago        = timeAgo(item.collectedAt);
-  _instaData[i]    = { products, username: authorId };
+  _instaData[i]    = { products, username: authorId, rawCaption, isTodayPick };
 
   const productRows = products.length
     ? products.map((p, pi) => `
@@ -2189,6 +2221,114 @@ const _IDOL_KW_UI = ['아이브','뉴진스','에스파','블랙핑크','트와�
 function isIdolCaption(caption) {
   const lo = (caption || '').toLowerCase();
   return _IDOL_KW_UI.some(k => lo.includes(k));
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Gemini 하이브리드 파서 (규칙 기반 실패 시 자동 호출)
+// ══════════════════════════════════════════════════════════════
+let _lastGeminiMs = 0;
+
+async function callGeminiForInstaCaption(caption, geminiKey) {
+  // 최소 5초 간격 유지 (분당 15회 제한)
+  const wait = 5000 - (Date.now() - _lastGeminiMs);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  _lastGeminiMs = Date.now();
+
+  const prompt = `다음 인스타그램 뷰티 캡션에서 사용한 메이크업 제품 목록을 추출해줘.
+
+캡션:
+${caption.slice(0, 1500)}
+
+JSON 배열만 반환 (설명 없이):
+[{"category":"카테고리","brand":"브랜드(한국어)","shade":"컬러/제품명"}]
+
+카테고리는 반드시 다음 중 하나만: 아이섀도우, 블러셔, 하이라이터, 립, 아이라이너, 마스카라, 아이브로우, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 컨투어/쉐딩, 베이스/프라이머, 기타
+브랜드명은 한국어로 (예: 롬앤, 클리오, 에뛰드, 어뮤즈)
+제품 정보가 없으면 [] 반환`;
+
+  const doFetch = () => fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
+  );
+
+  let r = await doFetch();
+
+  // 429 → 10초 대기 후 1회 재시도
+  if (r.status === 429) {
+    console.warn('Gemini 429 - 10초 후 재시도');
+    await new Promise(re => setTimeout(re, 10000));
+    _lastGeminiMs = Date.now();
+    r = await doFetch();
+  }
+
+  if (!r.ok) throw new Error(`Gemini API 오류 (${r.status})`);
+  const data = await r.json();
+  const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+  const m    = raw.match(/\[[\s\S]*?\]/);
+  if (!m) return [];
+
+  return JSON.parse(m[0]).map(item => ({
+    category: item.category || '기타',
+    brand:    item.brand    || '',
+    name:     INSTA_CAT_NAME[item.category] || item.category || '제품',
+    shade:    item.shade    || null,
+    price:    null,
+    link:     null,
+  }));
+}
+
+// 오늘의픽 중 제품 0개 카드에 자동 Gemini 분석
+async function enrichTodayPicksWithGemini(geminiKey) {
+  const targets = Object.entries(_instaData)
+    .filter(([, d]) => d.isTodayPick && d.products.length === 0)
+    .map(([i]) => Number(i));
+  if (!targets.length) return;
+  console.log(`✨ Gemini 분석 대상: ${targets.length}개 카드`);
+
+  for (const i of targets) {
+    try {
+      const { rawCaption, username } = _instaData[i];
+      const products = await callGeminiForInstaCaption(rawCaption, geminiKey);
+      if (!products.length) continue;
+
+      _instaData[i].products = products;
+
+      // 제품 행 재렌더
+      const rowsEl = $id(`insta-products-${i}`);
+      if (rowsEl) {
+        rowsEl.innerHTML = products.map((p, pi) => `
+          <div class="product-edit-row" id="insta-${i}-row-${pi}">
+            <span class="cat-tag">${esc(p.category)}</span>
+            <span>${esc(p.brand ? p.brand + ' ' + p.name : p.name)}</span>
+            <span>${esc(p.shade || '—')}</span>
+            <input type="text" placeholder="가격 입력" value="${esc(p.price||'')}"
+                   oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="price">
+            <input type="text" placeholder="🔗 링크 붙여넣기"
+                   oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="link">
+          </div>`).join('');
+        // 헤더 없으면 추가
+        if (!rowsEl.previousElementSibling?.classList?.contains('product-edit-header')) {
+          rowsEl.insertAdjacentHTML('beforebegin',
+            `<div class="product-edit-header"><span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span></div>`);
+        }
+      }
+
+      // textarea 갱신
+      const ta = $id(`insta-post-${i}`);
+      if (ta) ta.value = buildInstaPost(products, username, []);
+
+      // AI 분석 뱃지
+      const card = $id(`insta-card-${i}`);
+      const preview = card?.querySelector('.caption-preview');
+      if (preview && !preview.nextElementSibling?.classList?.contains('ai-badge')) {
+        preview.insertAdjacentHTML('afterend',
+          `<span class="ai-badge" style="font-size:.7rem;color:var(--green);margin-top:.2rem;display:block">✨ AI 분석 완료</span>`);
+      }
+    } catch (e) {
+      console.warn(`카드 ${i} Gemini 오류:`, e.message);
+    }
+  }
 }
 
 // 카테고리 표시 순서
