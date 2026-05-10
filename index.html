@@ -2225,10 +2225,9 @@ function addProductRow(cardIdx) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  제품명 정밀 검색 (Gemini + Google Search 그라운딩)
+//  제품명 정밀 검색 (Gemini 지식 기반 + Google Search 그라운딩)
 // ══════════════════════════════════════════════════════════════
 
-// 3초 간격 쿼터 제한
 let _lastLookupMs = 0;
 async function _throttleLookup() {
   const wait = 3000 - (Date.now() - _lastLookupMs);
@@ -2236,7 +2235,6 @@ async function _throttleLookup() {
   _lastLookupMs = Date.now();
 }
 
-// 제품명이 불완전한지 판단 (카테고리 단어만 있거나 비어있을 때)
 const _GENERIC_NAMES = new Set([
   '틴트','립틴트','립스틱','립글로스','립밤','립','쿠션','파운데이션','컨실러',
   '블러셔','블러쉬','치크','섀도우','아이섀도우','팔레트','마스카라','아이라이너',
@@ -2246,69 +2244,118 @@ const _GENERIC_NAMES = new Set([
 ]);
 function isIncomplete(name) {
   if (!name || name.trim().length < 2) return true;
-  const lo = name.toLowerCase().trim();
-  // 단어 2개 이하이고 마지막 단어가 카테고리 단어인 경우
-  const words = lo.split(/\s+/);
+  const words = name.toLowerCase().trim().split(/\s+/);
   return words.length <= 2 && _GENERIC_NAMES.has(words[words.length - 1]);
 }
 
-// Gemini API 호출 (그라운딩 지원 시도 → 폴백: 지식 기반)
+// ── Gemini 호출 공통 유틸 ─────────────────────────────────────
+async function _postGemini(body) {
+  const key = load('_mss_geminikey');
+  // 1차: 로컬 프록시 (npm run proxy)
+  try {
+    const r = await fetch('http://localhost:3001/api/gemini', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      signal: AbortSignal.timeout(15000),
+    });
+    return r; // ok 여부 불문하고 반환 (호출자가 판단)
+  } catch (e) {
+    if (e.name !== 'AbortError') { /* 프록시 없음 → 직접 시도 */ }
+    else throw e;
+  }
+  // 2차: 브라우저 키 직접 호출
+  if (!key) {
+    const err = new Error(
+      '프록시 서버가 꺼져 있고, 설정 탭에 Gemini API 키도 없습니다.\n\n' +
+      '해결 방법 ①: 터미널에서 npm run proxy 실행\n' +
+      '해결 방법 ②: 설정 탭 → Gemini API 키 입력'
+    );
+    err.code = 'NO_KEY';
+    throw err;
+  }
+  return fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      signal: AbortSignal.timeout(20000) },
+  );
+}
+
+function _parseGeminiText(data) {
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+  if (!text || /^unknown$/i.test(text.split('\n')[0].trim())) return null;
+  return text.split('\n')[0].trim().replace(/^["'`*#\-\s]+|["'`*\s]+$/g, '') || null;
+}
+
+// ── 핵심: 제품명 조회 ─────────────────────────────────────────
 async function lookupProductName(nameOrBrand, shade, category) {
   await _throttleLookup();
 
-  const searchHint = [nameOrBrand, shade].filter(Boolean).join(' ');
-  const prompt = `한국 화장품 제품의 정확한 제품 라인명을 찾아줘.
+  const hint = [nameOrBrand, shade].filter(Boolean).join(' ');
+  const prompt =
+    `한국 화장품 브랜드의 정확한 제품 라인명을 알려줘.\n\n` +
+    `- 브랜드/입력값: "${nameOrBrand}"\n` +
+    `- 색상/호수: "${shade}"\n` +
+    `- 카테고리: "${category}"\n\n` +
+    `위 정보로 정확한 제품 시리즈명(라인명)을 찾아줘. ` +
+    `구글 검색 결과도 참고해서 실제 판매되는 제품명을 알려줘.\n\n` +
+    `예시:\n` +
+    `에뛰드 + 뮤심한베이지 + 립 → 이더앤 듀이 시럽 틴트\n` +
+    `롬앤 + 00레드 + 립 → 제로 매트 립스틱\n` +
+    `클리오 + 브라운 + 아이라이너 → 킬 블랙 퍼펙트 라이너\n\n` +
+    `규칙: 제품 라인명만 한 줄. 브랜드명·색상명 제외. 모르면 "unknown".`;
 
-입력 정보:
-- 브랜드/현재값: "${nameOrBrand}"
-- 색상/호수: "${shade}"
-- 카테고리: "${category}"
+  // 시도 순서: ① googleSearch 그라운딩 ② google_search 그라운딩 ③ 지식 기반
+  const attempts = [
+    { tools: [{ googleSearch: {} }] },
+    { tools: [{ google_search: {} }] },
+    {},  // 그라운딩 없이 학습 데이터만
+  ];
 
-"${searchHint}" 키워드로 구글에서 검색해서 정확한 제품명을 알아내줘.
-
-예시:
-- 에뛰드 + 뮤심한베이지 + 립 → "이더앤 듀이 시럽 틴트"
-- 롬앤 + 00레드 + 립 → "제로 매트 립스틱"
-- 클리오 + 브라운 + 아이라이너 → "킬 블랙 퍼펙트 라이너"
-
-규칙: 제품 라인명만 한 줄로 답해. 브랜드명 제외, 색상명 제외.
-찾지 못했으면 "unknown"만 답해.`;
-
-  const makeBody = (useGrounding) => JSON.stringify({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    ...(useGrounding ? { tools: [{ google_search: {} }] } : {}),
-    generationConfig: { maxOutputTokens: 80, temperature: 0.1 },
-  });
-
-  const doFetch = async (body) => {
-    const geminiKey = load('_mss_geminikey');
+  let lastErr;
+  for (const extra of attempts) {
+    const body = JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      ...extra,
+      generationConfig: { maxOutputTokens: 80, temperature: 0.1 },
+    });
     try {
-      const r = await fetch('http://localhost:3001/api/gemini', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-      });
-      if (r.ok || r.status === 400) return r; // 400은 그라운딩 미지원일 수 있음
-    } catch {}
-    if (!geminiKey) throw new Error('프록시 꺼져있고 키도 없음');
-    return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
-    );
-  };
-
-  // 1차: 구글 검색 그라운딩
-  let r = await doFetch(makeBody(true));
-  // 400(그라운딩 미지원) 또는 실패 시 폴백: 지식 기반
-  if (!r.ok) r = await doFetch(makeBody(false));
-  if (!r.ok) throw new Error(`Gemini API ${r.status}`);
-
-  const data = await r.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-  if (!text || /unknown/i.test(text)) return null;
-  // 첫 줄만, 따옴표·마크다운 기호 제거
-  return text.split('\n')[0].trim().replace(/^["'`\-*#\s]+|["'`\-*\s]+$/g, '') || null;
+      const r = await _postGemini(body);
+      if (r.status === 400 || r.status === 403) continue; // 그라운딩 미지원 → 다음 시도
+      if (!r.ok) throw new Error(`Gemini API ${r.status}`);
+      const result = _parseGeminiText(await r.json());
+      if (result) return result;
+      // "unknown" 또는 빈 응답 → 다음 시도
+    } catch (e) {
+      if (e.code === 'NO_KEY') throw e; // 키 없음은 즉시 전파
+      lastErr = e;
+    }
+  }
+  if (lastErr) throw lastErr;
+  return null;
 }
 
-// 행별 🔍 버튼 클릭 핸들러
+// ── 검색 결과 토스트 알림 ─────────────────────────────────────
+function _showLookupToast(msg, type = 'info') {
+  let toast = $id('lookup-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'lookup-toast';
+    toast.style.cssText =
+      'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);' +
+      'max-width:420px;width:90%;padding:.8rem 1.2rem;border-radius:12px;' +
+      'font-size:.85rem;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.18);' +
+      'white-space:pre-line;line-height:1.5;text-align:center;transition:opacity .3s;';
+    document.body.appendChild(toast);
+  }
+  toast.style.background = type === 'err' ? '#fde8e8' : type === 'ok' ? '#e8fdf0' : '#f3f0ff';
+  toast.style.color       = type === 'err' ? '#b91c1c'  : type === 'ok' ? '#15803d'  : '#5b21b6';
+  toast.style.border      = `1.5px solid ${type === 'err' ? '#fca5a5' : type === 'ok' ? '#86efac' : '#c4b5fd'}`;
+  toast.style.opacity = '1';
+  toast.textContent = msg;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, type === 'err' ? 6000 : 3000);
+}
+
+// ── 행별 🔍 버튼 ──────────────────────────────────────────────
 async function searchProductName(btn, cardIdx) {
   const row       = btn.closest('.product-edit-row');
   const nameInput = row.querySelector('[data-field="name"]');
@@ -2316,35 +2363,44 @@ async function searchProductName(btn, cardIdx) {
   const category  = row.querySelector('[data-field="category"]')?.value || '';
   const curName   = nameInput.value.trim();
 
-  if (!curName && !shade) { alert('제품명이나 색상을 먼저 입력하세요.'); return; }
+  if (!curName && !shade) {
+    _showLookupToast('제품명이나 색상/호수를 먼저 입력하세요.', 'info');
+    return;
+  }
 
   const orig = btn.innerHTML;
   btn.innerHTML = '⏳'; btn.disabled = true;
+
   try {
     const found = await lookupProductName(curName, shade, category);
-    if (found && found !== curName) {
+    if (found) {
       nameInput.value = found;
       nameInput.dispatchEvent(new Event('input'));
+      nameInput.style.transition = 'border-color .3s';
       nameInput.style.borderColor = 'var(--green)';
       setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
       btn.innerHTML = '✅';
+      _showLookupToast(`✅ "${found}" 으로 완성`, 'ok');
     } else {
-      btn.innerHTML = '❓'; // 결과 없음
+      btn.innerHTML = '❓';
+      _showLookupToast(`"${curName} ${shade}" 검색 결과 없음. 직접 입력해주세요.`, 'info');
     }
   } catch (e) {
     console.error('제품명 검색 실패:', e);
     btn.innerHTML = '❌';
+    _showLookupToast(e.message || '검색 실패', 'err');
   }
-  setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2500);
+
+  setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 3000);
 }
 
-// 카드 전체: 불완전한 행 일괄 검색
+// ── 카드 전체 일괄 검색 ───────────────────────────────────────
 async function searchAllProductNames(cardIdx) {
-  const btn = $id(`insta-search-all-${cardIdx}`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '🔍 검색 중…'; }
+  const allBtn = $id(`insta-search-all-${cardIdx}`);
+  if (allBtn) { allBtn.disabled = true; allBtn.innerHTML = '🔍 검색 중…'; }
 
   const rows = [...document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`)];
-  let found = 0;
+  let found = 0, total = 0;
 
   for (const row of rows) {
     const nameInput = row.querySelector('[data-field="name"]');
@@ -2352,10 +2408,11 @@ async function searchAllProductNames(cardIdx) {
     const category  = row.querySelector('[data-field="category"]')?.value || '';
     const curName   = nameInput?.value.trim() || '';
 
-    if (!isIncomplete(curName) && curName) continue; // 이미 완성된 제품명은 스킵
+    if (!isIncomplete(curName) && curName) continue;
+    total++;
 
-    const lookupBtn = row.querySelector('.btn-lookup');
-    if (lookupBtn) { lookupBtn.innerHTML = '⏳'; lookupBtn.disabled = true; }
+    const lb = row.querySelector('.btn-lookup');
+    if (lb) { lb.innerHTML = '⏳'; lb.disabled = true; }
 
     try {
       const result = await lookupProductName(curName, shade, category);
@@ -2364,23 +2421,27 @@ async function searchAllProductNames(cardIdx) {
         nameInput.dispatchEvent(new Event('input'));
         nameInput.style.borderColor = 'var(--green)';
         setTimeout(() => { nameInput.style.borderColor = ''; }, 2500);
-        if (lookupBtn) lookupBtn.innerHTML = '✅';
+        if (lb) lb.innerHTML = '✅';
         found++;
       } else {
-        if (lookupBtn) lookupBtn.innerHTML = '❓';
+        if (lb) lb.innerHTML = '❓';
       }
-    } catch {
-      if (lookupBtn) { lookupBtn.innerHTML = '❌'; }
+    } catch (e) {
+      if (lb) lb.innerHTML = '❌';
+      if (e.code === 'NO_KEY') {
+        _showLookupToast(e.message, 'err');
+        break; // 키 없으면 나머지 행도 안 되니 중단
+      }
     }
-    setTimeout(() => {
-      if (lookupBtn && !lookupBtn.disabled) return;
-      if (lookupBtn) { lookupBtn.innerHTML = '🔍'; lookupBtn.disabled = false; }
-    }, 3000);
+    setTimeout(() => { if (lb) { lb.innerHTML = '🔍'; lb.disabled = false; } }, 3500);
   }
 
-  if (btn) {
-    btn.innerHTML = found ? `✅ ${found}개 완성` : '🔍 제품명 채우기';
-    setTimeout(() => { btn.innerHTML = '🔍 제품명 채우기'; btn.disabled = false; }, 3000);
+  const msg = total === 0 ? '완성된 제품명만 있어요' :
+              found > 0   ? `✅ ${found}/${total}개 완성` : `검색 결과 없음 (직접 입력해주세요)`;
+  _showLookupToast(msg, found > 0 ? 'ok' : 'info');
+  if (allBtn) {
+    allBtn.innerHTML = found ? `✅ ${found}개 완성` : '🔍 제품명 채우기';
+    setTimeout(() => { allBtn.innerHTML = '🔍 제품명 채우기'; allBtn.disabled = false; }, 3500);
   }
 }
 
