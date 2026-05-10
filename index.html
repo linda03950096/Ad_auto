@@ -2160,11 +2160,23 @@ async function loadInstaQueue() {
     const todayPicks  = items.filter(i => i.todayPick);
     const olderItems  = items.filter(i => !i.todayPick);
 
+    // 제품 못 찾은 카드 수 계산 (렌더 전에 미리)
+    const noProductCount = todayPicks.filter(item => {
+      const cap = item.caption || '';
+      return parseInstagramCaption(cap).length === 0;
+    }).length;
+
     let html = '';
     if (todayPicks.length) {
       html += `<div class="queue-section-header">
         📅 오늘의 큐 <span class="queue-count">${todayPicks.length}개</span>
         <span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>
+        ${noProductCount > 0 ? `
+        <button id="btn-ai-enrich" onclick="startAiEnrich(this)"
+          style="margin-left:auto;font-size:.76rem;padding:.28rem .7rem;border-radius:8px;
+                 border:1.5px solid #d8b4fe;background:#f5f0ff;color:#7c3aed;cursor:pointer;font-weight:700">
+          ✨ AI 제품 분석 (${noProductCount}개)
+        </button>` : ''}
       </div>`;
       html += todayPicks.map((item, i) => renderInstaCard(item, i, true)).join('');
     }
@@ -2175,10 +2187,6 @@ async function loadInstaQueue() {
       html += olderItems.map((item, i) => renderInstaCard(item, todayPicks.length + i, false)).join('');
     }
     el.innerHTML = html || '<div class="status warn">게시물 없음</div>';
-
-    // Gemini 자동 분석: 오늘의픽 중 제품 못 찾은 카드
-    const geminiKey = load('_mss_geminikey');
-    if (geminiKey) enrichTodayPicksWithGemini(geminiKey);
 
   } catch {
     el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
@@ -2611,45 +2619,64 @@ JSON 배열만 반환 (설명 없이):
   }));
 }
 
-// 오늘의픽 중 제품 0개 카드에 자동 Gemini 분석
+// ── AI 분석 버튼 핸들러 (수동 실행) ─────────────────────────
+async function startAiEnrich(btn) {
+  const geminiKey = load('_mss_geminikey'); // proxy 있으면 null이어도 OK
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 분석 중…';
+  try {
+    await enrichTodayPicksWithGemini(geminiKey);
+    btn.innerHTML = '✅ 분석 완료';
+  } catch {
+    btn.innerHTML = '❌ 실패 - 다시 시도';
+    btn.disabled = false;
+  }
+}
+
+// 오늘의픽 중 제품 0개 카드 Gemini 분석 (수동 버튼으로만 실행)
 async function enrichTodayPicksWithGemini(geminiKey) {
-  const MAX_AUTO = 8; // free tier 10 RPM 안전 마진 (6.5s × 8 ≈ 52초)
+  const MAX_ENRICH = 8; // free tier 10 RPM, 6.5초 간격 → 분당 ≈ 9회 이내
   const targets = Object.entries(_instaData)
     .filter(([, d]) => d.isTodayPick && d.products.length === 0)
     .map(([i]) => Number(i))
-    .slice(0, MAX_AUTO);
-  if (!targets.length) return;
-  console.log(`✨ Gemini 자동 분석: ${targets.length}개 카드 (6.5초 간격)`);
+    .slice(0, MAX_ENRICH);
+  if (!targets.length) { console.log('분석할 카드 없음 (이미 완료)'); return; }
+  console.log(`✨ Gemini 분석 시작: ${targets.length}개 카드 (6.5초 간격)`);
+
+  const btn = $id('btn-ai-enrich');
+  let done = 0;
 
   for (const i of targets) {
+    if (btn) btn.innerHTML = `⏳ ${done + 1}/${targets.length} 분석 중…`;
     try {
       const { rawCaption, username } = _instaData[i];
       const products = await callGeminiForInstaCaption(rawCaption, geminiKey);
-      if (!products.length) continue;
+      if (!products.length) { done++; continue; }
 
       _instaData[i].products = products;
 
-      // 제품 행 재렌더
       const rowsEl = $id(`insta-products-${i}`);
-      if (rowsEl) {
-        rowsEl.innerHTML = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
-      }
+      if (rowsEl) rowsEl.innerHTML = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
 
-      // textarea 갱신
       const ta = $id(`insta-post-${i}`);
       if (ta) ta.value = buildInstaPost(products, username, []);
 
-      // AI 분석 뱃지
       const card = $id(`insta-card-${i}`);
       const preview = card?.querySelector('.caption-preview');
       if (preview && !preview.nextElementSibling?.classList?.contains('ai-badge')) {
         preview.insertAdjacentHTML('afterend',
           `<span class="ai-badge" style="font-size:.7rem;color:var(--green);margin-top:.2rem;display:block">✨ AI 분석 완료</span>`);
       }
+      done++;
     } catch (e) {
       console.warn(`카드 ${i} Gemini 오류:`, e.message);
+      if (e.message?.includes('429') || e.message?.includes('quota')) {
+        _showLookupToast('Gemini API 한도 초과. 잠시 후 다시 시도해주세요.', 'err');
+        break;
+      }
     }
   }
+  if (btn) btn.innerHTML = `✅ ${done}개 분석 완료`;
 }
 
 // 카테고리 표시 순서
