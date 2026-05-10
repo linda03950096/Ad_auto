@@ -1,4 +1,5 @@
 {
+  "geminiKey": "",
   "chromeProfileDir": ".instagram-profile",
   "headless": false,
   "scrollsPerSource": 3,

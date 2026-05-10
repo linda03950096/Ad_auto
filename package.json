@@ -1,7 +1,8 @@
 {
   "scripts": {
     "collect:instagram": "node scripts/instagram_collect.mjs",
-    "collect:instagram:publish": "node scripts/instagram_collect.mjs --publish"
+    "collect:instagram:publish": "node scripts/instagram_collect.mjs --publish",
+    "proxy": "node scripts/api_proxy.mjs"
   },
   "dependencies": {
     "playwright": "^1.49.1"

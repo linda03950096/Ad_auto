@@ -2246,11 +2246,23 @@ JSON 배열만 반환 (설명 없이):
 브랜드명은 한국어로 (예: 롬앤, 클리오, 에뛰드, 어뮤즈)
 제품 정보가 없으면 [] 반환`;
 
-  const doFetch = () => fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-    { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
-  );
+  const reqBody = JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] });
+
+  const doFetch = async () => {
+    // 1순위: 로컬 프록시 (키가 브라우저에 노출되지 않음)
+    try {
+      const r = await fetch('http://localhost:3001/api/gemini', {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: reqBody,
+      });
+      if (r.ok || r.status === 429) return r;   // 프록시 응답 사용
+    } catch {}
+    // 2순위: 직접 호출 (프록시 꺼져 있고 브라우저 키 있는 경우)
+    if (!geminiKey) throw new Error('프록시 서버가 꺼져 있고 API 키도 없습니다. npm run proxy 실행 또는 설정 탭에 키 입력.');
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: reqBody }
+    );
+  };
 
   let r = await doFetch();
 
