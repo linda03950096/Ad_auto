@@ -2164,6 +2164,8 @@ function renderInstaCard(item, i, isTodayPick = false) {
       <div id="insta-products-${i}">${productRows}</div>
       <div class="product-edit-add">
         <button class="btn btn-sm btn-reset" onclick="addProductRow(${i})" style="font-size:.78rem;padding:.3rem .8rem">➕ 행 추가</button>
+        <button class="btn btn-sm" onclick="reparseCaption(${i})"
+                style="font-size:.78rem;padding:.3rem .8rem;background:#f0fdf4;border-color:#86efac;color:#15803d">🔄 캡션 재파싱</button>
         <button id="insta-search-all-${i}" class="btn btn-sm" onclick="searchAllProductNames(${i})"
                 style="font-size:.78rem;padding:.3rem .8rem;background:#f5f0ff;border-color:#d8b4fe;color:#7c3aed">🔍 제품명 채우기</button>
         <button id="insta-oy-all-${i}" class="btn btn-sm" onclick="searchAllOliveYoungPrices(${i})"
@@ -2565,6 +2567,27 @@ function buildInstaPost(products, authorId, extraHashtags) {
   const tags = generateHashtags('', authorId || '', unique);
   if (tags.length) out += tags.join(' ');
   return out.trimEnd();
+}
+
+// 캡션 재파싱 — 저장된 products 무시하고 캡션에서 다시 추출
+function reparseCaption(cardIdx) {
+  const stored = _instaData[cardIdx];
+  if (!stored) return;
+  const products = parseInstagramCaption(stored.rawCaption);
+  if (!products.length) { alert('캡션에서 제품을 찾지 못했습니다.'); return; }
+
+  stored.products = products;
+  const rowsEl = document.getElementById(`insta-products-${cardIdx}`);
+  if (rowsEl) rowsEl.innerHTML = products.map((p, pi) => productRowHTML(cardIdx, pi, p)).join('');
+  const ta = document.getElementById(`insta-post-${cardIdx}`);
+  if (ta) ta.value = buildInstaPost(products, stored.username, []);
+
+  // 서버+localStorage 캐시 갱신
+  if (stored.itemId) {
+    if (!_queueData[stored.itemId]) _queueData[stored.itemId] = {};
+    _queueData[stored.itemId].products = products;
+    scheduleQueueSave(stored.itemId);
+  }
 }
 
 // 셀 편집 시 게시물 텍스트 실시간 업데이트 + 자동 저장
