@@ -88,23 +88,47 @@ async function _scrapeOliveYoung(query) {
       `https://www.oliveyoung.co.kr/store/search/getSearchMain.do` +
       `?query=${encodeURIComponent(query)}&page=1&rowsPerPage=8`;
 
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.goto(searchUrl, { waitUntil: 'load', timeout: 25000 });
+    console.log(`   📄 페이지 URL: ${page.url()}`);
 
-    // 제품 목록이 뜰 때까지 최대 8초 대기
-    const listSel = '#prd-list .li_good, .prd-list .li_good';
-    await page.waitForSelector(listSel, { timeout: 8000 }).catch(() => {});
+    // JS 렌더링 대기 — li_good 또는 prd_li 계열 모두 시도
+    const listSel = [
+      '#prd-list .li_good', '.prd-list .li_good',
+      '#prd-list li', '.prd_wrap .prd_li',
+      '.search_result_wrap li', 'ul.list_prd li',
+    ].join(', ');
+    await page.waitForSelector(listSel, { timeout: 10000 }).catch(() => {});
 
     const result = await page.evaluate(() => {
-      // 선택자 우선순위: id → class
+      // 실제 렌더된 HTML 구조 디버깅
+      const body = document.body.innerHTML;
+      const hasPrdList = body.includes('li_good') || body.includes('prd_li') || body.includes('list_prd');
+      console.log('[OY debug] li_good/prd_li 존재:', hasPrdList);
+
+      // 셀렉터 후보 (여러 패턴 시도)
       const item =
         document.querySelector('#prd-list .li_good') ||
-        document.querySelector('.prd-list .li_good');
-      if (!item) return null;
+        document.querySelector('.prd-list .li_good')  ||
+        document.querySelector('.prd_wrap .prd_li')   ||
+        document.querySelector('ul.list_prd li')       ||
+        document.querySelector('#Contents .li_good')   ||
+        document.querySelector('[class*="prd_li"]')    ||
+        document.querySelector('[class*="li_good"]');
+
+      if (!item) {
+        // 못 찾았을 때 — 어떤 li 가 있는지 힌트 출력
+        const lis = [...document.querySelectorAll('li')].slice(0, 5);
+        console.log('[OY debug] li 없음, 샘플 li:', lis.map(l => l.className).join(' | '));
+        return null;
+      }
+      console.log('[OY debug] item.className:', item.className);
 
       // 제품명
       const nameEl =
         item.querySelector('.prd-name a') ||
         item.querySelector('.prd-name')   ||
+        item.querySelector('.prod_name')  ||
+        item.querySelector('.name')       ||
         item.querySelector('a[class*="name"]');
 
       // 가격 — 여러 패턴 시도
@@ -112,17 +136,20 @@ async function _scrapeOliveYoung(query) {
         item.querySelector('.prd-price .price strong') ||
         item.querySelector('.prd-price strong')        ||
         item.querySelector('.price strong')            ||
+        item.querySelector('.prod_price strong')       ||
         item.querySelector('.tx-num')                  ||
-        item.querySelector('.prd-price');
+        item.querySelector('[class*="price"] strong')  ||
+        item.querySelector('[class*="price"]');
 
-      if (!priceEl) return null;
+      if (!priceEl) {
+        console.log('[OY debug] priceEl 없음, item HTML:', item.outerHTML.slice(0, 300));
+        return null;
+      }
 
-      // "12,000" 형태에서 숫자+쉼표만 추출 후 "원" 붙이기
       const raw    = priceEl.textContent.replace(/\s+/g, '');
       const digits = raw.match(/[\d,]+/)?.[0];
       if (!digits) return null;
 
-      // 상품 링크
       const linkEl = item.querySelector('a[href*="goodsNo"]') || item.querySelector('a');
 
       return {
@@ -132,7 +159,15 @@ async function _scrapeOliveYoung(query) {
       };
     });
 
-    return result;   // null 이면 "결과 없음"
+    if (!result) {
+      // 페이지 소스 일부 로그 (셀렉터 디버깅용)
+      const snippet = await page.evaluate(() =>
+        document.body.innerHTML.slice(0, 800).replace(/\s+/g, ' ')
+      );
+      console.log(`   ⚠️ 결과 없음. 페이지 스니펫: ${snippet}`);
+    }
+
+    return result;
 
   } finally {
     await page.close();
