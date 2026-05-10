@@ -418,26 +418,42 @@
     }
 
     .product-edit-row {
-      display: grid; grid-template-columns: 1.2fr 1.4fr .8fr 1fr 1.6fr;
+      display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; align-items: center; padding: .4rem 0;
       border-bottom: 1px solid #f5eef5; font-size: .83rem;
     }
     .product-edit-row:last-child { border-bottom: none; }
-    .product-edit-row input {
-      padding: .35rem .6rem; border: 1.5px solid var(--border); border-radius: 7px;
-      font-size: .82rem; width: 100%;
+    .product-edit-row input,
+    .product-edit-row select {
+      padding: .35rem .5rem; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: .82rem; width: 100%; background: #fff; font-family: inherit;
+      color: var(--text); transition: border-color .15s;
     }
-    .product-edit-row .cat-tag {
-      font-size: .72rem; background: #fde8f3; color: var(--pink-dark);
-      padding: .15rem .45rem; border-radius: 20px; font-weight: 700; white-space: nowrap;
+    .product-edit-row input:focus,
+    .product-edit-row select:focus {
+      outline: none; border-color: var(--pink);
+    }
+    .product-edit-row select {
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23aaa'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .5rem center;
+      padding-right: 1.4rem;
+    }
+    .product-edit-add {
+      margin-top: .4rem;
     }
     .product-edit-header {
-      display: grid; grid-template-columns: 1.2fr 1.4fr .8fr 1fr 1.6fr;
+      display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
       padding: .3rem 0 .5rem; border-bottom: 2px solid var(--border); margin-bottom: .2rem;
     }
-    @media (max-width: 600px) {
-      .product-edit-row, .product-edit-header { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 640px) {
+      .product-edit-row { grid-template-columns: 1fr 1.4fr 1fr; }
+      .product-edit-header { grid-template-columns: 1fr 1.4fr 1fr; }
+      .product-edit-row input[data-field="price"],
+      .product-edit-row input[data-field="link"],
+      .product-edit-header span:nth-child(4),
+      .product-edit-header span:nth-child(5) { display: none; }
     }
 
     /* ── TRIGGER CARD ── */
@@ -2156,6 +2172,41 @@ async function loadInstaQueue() {
   }
 }
 
+// ── 제품 행 HTML (카테고리 드롭다운 + 전체 편집 가능) ────────
+const _ALL_CATS = ['파운데이션','쿠션','컨실러','베이스/프라이머','세팅파우더/픽서',
+                   '블러셔','하이라이터','컨투어/쉐딩','아이브로우','아이섀도우',
+                   '아이라이너','마스카라','립','기타'];
+
+function productRowHTML(cardIdx, pi, p) {
+  const curCat  = p.category || '기타';
+  const opts    = _ALL_CATS.map(c =>
+    `<option value="${esc(c)}"${c === curCat ? ' selected' : ''}>${c}</option>`
+  ).join('');
+  const nameVal = p.brand ? `${p.brand} ${p.name}` : (p.name || '');
+  return `<div class="product-edit-row" id="insta-${cardIdx}-row-${pi}">
+    <select oninput="updateInstaPost(${cardIdx})" data-field="category">${opts}</select>
+    <input type="text" value="${esc(nameVal)}" placeholder="브랜드 제품명"
+           oninput="updateInstaPost(${cardIdx})" data-field="name">
+    <input type="text" value="${esc(p.shade || '')}" placeholder="호수/색상"
+           oninput="updateInstaPost(${cardIdx})" data-field="shade">
+    <input type="text" value="${esc(p.price || '')}" placeholder="가격"
+           oninput="updateInstaPost(${cardIdx})" data-field="price">
+    <input type="text" value="${esc(p.link || '')}" placeholder="🔗 링크"
+           oninput="updateInstaPost(${cardIdx})" data-field="link">
+  </div>`;
+}
+
+function addProductRow(cardIdx) {
+  const rowsEl = $id(`insta-products-${cardIdx}`);
+  const pi = rowsEl.querySelectorAll('.product-edit-row').length;
+  rowsEl.insertAdjacentHTML('beforeend',
+    productRowHTML(cardIdx, pi, { category: '립', brand: '', name: '', shade: '', price: '', link: '' }));
+  if (!rowsEl.previousElementSibling?.classList?.contains('product-edit-header')) {
+    rowsEl.insertAdjacentHTML('beforebegin',
+      `<div class="product-edit-header"><span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span></div>`);
+  }
+}
+
 function renderInstaCard(item, i, isTodayPick = false) {
   const rawCaption = item.caption || '';
   const cleanedCap = cleanInstagramCaption(rawCaption);
@@ -2165,18 +2216,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
   const ago        = timeAgo(item.collectedAt);
   _instaData[i]    = { products, username: authorId, rawCaption, isTodayPick };
 
-  const productRows = products.length
-    ? products.map((p, pi) => `
-      <div class="product-edit-row" id="insta-${i}-row-${pi}">
-        <span class="cat-tag">${esc(p.category)}</span>
-        <span>${esc(p.brand ? p.brand + ' ' + p.name : p.name)}</span>
-        <span>${esc(p.shade || '—')}</span>
-        <input type="text" placeholder="가격 입력" value="${esc(p.price || '')}"
-               oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="price">
-        <input type="text" placeholder="🔗 링크 붙여넣기"
-               oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="link">
-      </div>`).join('')
-    : '<p style="font-size:.83rem;color:var(--muted);padding:.5rem 0">캡션에서 제품을 찾지 못했습니다. 아래 텍스트를 직접 편집하세요.</p>';
+  const productRows = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
 
   const postText = buildInstaPost(products, authorId, []);
 
@@ -2204,11 +2244,13 @@ function renderInstaCard(item, i, isTodayPick = false) {
     </div>
 
     <div class="insta-body">
-      ${products.length ? `
       <div class="product-edit-header">
         <span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span>
-      </div>` : ''}
+      </div>
       <div id="insta-products-${i}">${productRows}</div>
+      <div class="product-edit-add">
+        <button class="btn btn-sm btn-reset" onclick="addProductRow(${i})" style="font-size:.78rem;padding:.3rem .8rem">➕ 행 추가</button>
+      </div>
 
       <div style="margin-top:1rem">
         <label style="font-size:.8rem;font-weight:600;color:var(--muted);display:block;margin-bottom:.4rem">
@@ -2317,21 +2359,7 @@ async function enrichTodayPicksWithGemini(geminiKey) {
       // 제품 행 재렌더
       const rowsEl = $id(`insta-products-${i}`);
       if (rowsEl) {
-        rowsEl.innerHTML = products.map((p, pi) => `
-          <div class="product-edit-row" id="insta-${i}-row-${pi}">
-            <span class="cat-tag">${esc(p.category)}</span>
-            <span>${esc(p.brand ? p.brand + ' ' + p.name : p.name)}</span>
-            <span>${esc(p.shade || '—')}</span>
-            <input type="text" placeholder="가격 입력" value="${esc(p.price||'')}"
-                   oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="price">
-            <input type="text" placeholder="🔗 링크 붙여넣기"
-                   oninput="updateInstaPost(${i})" data-pi="${pi}" data-field="link">
-          </div>`).join('');
-        // 헤더 없으면 추가
-        if (!rowsEl.previousElementSibling?.classList?.contains('product-edit-header')) {
-          rowsEl.insertAdjacentHTML('beforebegin',
-            `<div class="product-edit-header"><span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span></div>`);
-        }
+        rowsEl.innerHTML = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
       }
 
       // textarea 갱신
@@ -2398,17 +2426,20 @@ function buildInstaPost(products, authorId, extraHashtags) {
   return out.trimEnd();
 }
 
-// 가격/링크 입력 시 게시물 텍스트 실시간 업데이트
+// 셀 편집 시 게시물 텍스트 실시간 업데이트 (카테고리·제품명·호수·가격·링크 전부)
 function updateInstaPost(cardIdx) {
   const stored = _instaData[cardIdx];
   if (!stored) return;
 
-  const products = stored.products.map((p, pi) => {
-    const row   = document.querySelector(`#insta-${cardIdx}-row-${pi}`);
-    const price = row?.querySelector('[data-field="price"]')?.value.trim() || null;
-    const link  = row?.querySelector('[data-field="link"]')?.value.trim() || null;
-    return { ...p, price, link };
-  });
+  const rows = document.querySelectorAll(`#insta-products-${cardIdx} .product-edit-row`);
+  const products = [...rows].map(row => {
+    const category = row.querySelector('[data-field="category"]')?.value || '기타';
+    const name     = row.querySelector('[data-field="name"]')?.value.trim() || '';
+    const shade    = row.querySelector('[data-field="shade"]')?.value.trim() || '';
+    const price    = row.querySelector('[data-field="price"]')?.value.trim() || null;
+    const link     = row.querySelector('[data-field="link"]')?.value.trim() || null;
+    return { category, brand: '', name, shade, price: price || null, link: link || null };
+  }).filter(p => p.name);
 
   $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, []);
 }
