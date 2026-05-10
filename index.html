@@ -1110,7 +1110,7 @@ ${text.slice(0,8000)}
 규칙: 실제 언급 제품만, 해시태그 6-12개 #메이크업 #손민수 포함, JSON만 출력`;
 
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2259,7 +2259,7 @@ JSON 배열만 반환 (설명 없이):
     // 2순위: 직접 호출 (프록시 꺼져 있고 브라우저 키 있는 경우)
     if (!geminiKey) throw new Error('프록시 서버가 꺼져 있고 API 키도 없습니다. npm run proxy 실행 또는 설정 탭에 키 입력.');
     return fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       { method:'POST', headers:{'Content-Type':'application/json'}, body: reqBody }
     );
   };
