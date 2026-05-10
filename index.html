@@ -418,7 +418,7 @@
     }
 
     .product-edit-row {
-      display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
+      display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr auto;
       gap: .4rem; align-items: center; padding: .4rem 0;
       border-bottom: 1px solid #f5eef5; font-size: .83rem;
     }
@@ -466,6 +466,12 @@
     }
     .btn-oy:hover:not(:disabled) { background: #fef3c7; border-color: #f59e0b; }
     .btn-oy:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-del-row {
+      flex-shrink: 0; border: 1.5px solid #fca5a5; background: #fff5f5;
+      border-radius: 7px; padding: .3rem .45rem; font-size: .8rem;
+      cursor: pointer; color: #dc2626; line-height: 1; transition: background .15s;
+    }
+    .btn-del-row:hover { background: #fee2e2; border-color: #ef4444; }
     .product-edit-header {
       display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
@@ -1728,6 +1734,7 @@ function productRowHTML(cardIdx, pi, p) {
     </div>
     <input type="text" value="${esc(p.link || '')}" placeholder="🔗 링크"
            oninput="updateInstaPost(${cardIdx})" data-field="link">
+    <button class="btn-del-row" onclick="deleteProductRow(this, ${cardIdx})" title="행 삭제">✕</button>
   </div>`;
 }
 
@@ -1740,6 +1747,11 @@ function addProductRow(cardIdx) {
     rowsEl.insertAdjacentHTML('beforebegin',
       `<div class="product-edit-header"><span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span></div>`);
   }
+}
+
+function deleteProductRow(btn, cardIdx) {
+  btn.closest('.product-edit-row').remove();
+  updateInstaPost(cardIdx);
 }
 
 // ══════════════════════════════════════════════════════════════
