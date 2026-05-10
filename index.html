@@ -562,6 +562,71 @@
       .pick-header { flex-direction: column; }
       .pick-thumb { width: 100%; }
     }
+
+    /* ── INSTA SUB-TABS (업로드 전/완료) ── */
+    .insta-sub-tabs {
+      display: flex; gap: .4rem; margin-bottom: 1rem;
+    }
+    .insta-sub-tab {
+      display: inline-flex; align-items: center; gap: .4rem;
+      padding: .48rem 1.1rem; border-radius: 9px; font-size: .88rem; font-weight: 700;
+      cursor: pointer; border: 1.5px solid var(--border);
+      background: #fff; color: var(--muted); transition: all .15s;
+    }
+    .insta-sub-tab.active {
+      background: #fde8f3; color: var(--pink-dark); border-color: var(--pink);
+    }
+    .insta-sub-tab.active.done-tab {
+      background: #d1fae5; color: #065f46; border-color: #6ee7b7;
+    }
+    .insta-sub-tab:hover:not(.active) { background: #fdf5f9; }
+    .insta-sub-count {
+      font-size: .72rem; font-weight: 800; padding: .1rem .45rem;
+      border-radius: 20px; background: var(--pink-dark); color: #fff;
+    }
+    .insta-sub-tab.active.done-tab .insta-sub-count { background: #065f46; }
+
+    /* ── UPLOAD BUTTON ── */
+    .btn-upload-done {
+      background: #d1fae5; color: #065f46; border: 1.5px solid #6ee7b7;
+      border-radius: 8px; padding: .38rem .85rem; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-upload-done:hover { background: #a7f3d0; }
+    .btn-upload-undo {
+      background: #fff3cd; color: #856404; border: 1.5px solid #ffc107;
+      border-radius: 8px; padding: .38rem .85rem; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-upload-undo:hover { background: #fef08a; }
+    .upload-done-badge {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .7rem; font-weight: 800; padding: .1rem .45rem;
+      border-radius: 20px; background: #d1fae5; color: #065f46;
+      vertical-align: middle; margin-left: .3rem;
+    }
+
+    /* ── SYNC STATUS ── */
+    .sync-bar {
+      display: flex; align-items: center; gap: .55rem;
+      font-size: .76rem; color: var(--muted); margin-top: .7rem;
+      padding: .5rem .8rem; background: #f9f4fb; border-radius: 8px;
+      flex-wrap: wrap;
+    }
+    .sync-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: #aaa;
+    }
+    .sync-dot.online  { background: var(--green); }
+    .sync-dot.offline { background: #aaa; }
+    .sync-dot.saving  { background: var(--blue); animation: pulse .8s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .sync-server-input {
+      font-size: .76rem; padding: .2rem .5rem; border: 1.5px solid var(--border);
+      border-radius: 6px; background: #fff; color: var(--text);
+      font-family: monospace; width: 200px; max-width: 100%;
+    }
+    .sync-server-input:focus { outline: none; border-color: var(--pink); }
   </style>
 <!-- GitHub Actions가 secrets에서 생성한 키 파일 (없으면 무시) -->
 <script src="keys.js" onerror="window.__KEYS=window.__KEYS||{}"></script>
@@ -732,6 +797,18 @@
         캡션에서 제품이 자동 추출되고, <strong>가격·링크만 직접 입력</strong>하면 게시물 텍스트가 완성됩니다.
       </p>
       <button class="btn btn-primary" style="margin-top:.9rem" onclick="loadInstaQueue()">🔄 큐 불러오기</button>
+
+      <div class="sync-bar">
+        <span class="sync-dot offline" id="syncDot"></span>
+        <span id="syncTxt">오프라인 (localhost만 저장)</span>
+        <span style="color:var(--border)">|</span>
+        <label style="margin:0;font-size:.76rem;font-weight:600;color:var(--muted)">서버:</label>
+        <input class="sync-server-input" id="syncServerUrl" value="http://localhost:3001"
+               placeholder="http://192.168.x.x:3001"
+               onchange="updateServerUrl(this.value)"
+               title="다른 기기에서 접속 시 npm run proxy 실행 PC의 IP 주소 입력">
+        <button onclick="checkSyncServer()" style="font-size:.73rem;padding:.18rem .55rem;border-radius:6px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-weight:700">연결 확인</button>
+      </div>
     </div>
 
     <div id="instaContent"></div>
@@ -2138,7 +2215,18 @@ async function loadInstaQueue() {
   const el = $id('instaContent');
   el.innerHTML = '<div class="status info"><div class="spin-wrap"><div class="spinner"></div>큐 불러오는 중...</div></div>';
 
-  // 크롤러가 수집한 미등록 브랜드 캐시 병합 (패턴3 캐시도 리셋)
+  // 저장된 서버 URL 복원
+  const savedUrl = load('_mss_server_url');
+  if (savedUrl) {
+    _serverUrl = savedUrl.replace(/\/$/, '');
+    const inp = $id('syncServerUrl');
+    if (inp) inp.value = _serverUrl;
+  }
+
+  // 저장 데이터 로드 (서버 → localStorage 순)
+  await loadQueueData();
+
+  // 크롤러가 수집한 미등록 브랜드 캐시 병합
   try {
     const cr = await fetch(`./instagram_brands_cache.json?_=${Date.now()}`);
     if (cr.ok) { Object.assign(INSTA_ACCOUNT_BRANDS, await cr.json()); invalidateBrandCache(); }
@@ -2157,18 +2245,17 @@ async function loadInstaQueue() {
       return;
     }
 
-    const todayPicks  = items.filter(i => i.todayPick);
-    const olderItems  = items.filter(i => !i.todayPick);
+    const todayPicks = items.filter(i => i.todayPick);
+    const olderItems = items.filter(i => !i.todayPick);
 
-    // 제품 못 찾은 카드 수 계산 (렌더 전에 미리)
-    const noProductCount = todayPicks.filter(item => {
-      const cap = item.caption || '';
-      return parseInstagramCaption(cap).length === 0;
-    }).length;
+    const noProductCount = todayPicks.filter(item =>
+      parseInstagramCaption(item.caption || '').length === 0 &&
+      !(_queueData[item.id]?.products?.length)
+    ).length;
 
-    let html = '';
+    let cardsHtml = '';
     if (todayPicks.length) {
-      html += `<div class="queue-section-header">
+      cardsHtml += `<div class="queue-section-header">
         📅 오늘의 큐 <span class="queue-count">${todayPicks.length}개</span>
         <span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>
         ${noProductCount > 0 ? `
@@ -2178,15 +2265,32 @@ async function loadInstaQueue() {
           ✨ AI 제품 분석 (${noProductCount}개)
         </button>` : ''}
       </div>`;
-      html += todayPicks.map((item, i) => renderInstaCard(item, i, true)).join('');
+      cardsHtml += todayPicks.map((item, i) => renderInstaCard(item, i, true)).join('');
     }
     if (olderItems.length) {
-      html += `<div class="queue-section-header" style="margin-top:1.5rem">
+      cardsHtml += `<div class="queue-section-header" style="margin-top:1.5rem">
         📦 이전 수집 <span class="queue-count">${olderItems.length}개</span>
       </div>`;
-      html += olderItems.map((item, i) => renderInstaCard(item, todayPicks.length + i, false)).join('');
+      cardsHtml += olderItems.map((item, i) => renderInstaCard(item, todayPicks.length + i, false)).join('');
     }
-    el.innerHTML = html || '<div class="status warn">게시물 없음</div>';
+
+    const totalUploaded = items.filter(it => _queueData[it.id]?.uploaded).length;
+    const totalPending  = items.length - totalUploaded;
+
+    el.innerHTML = `
+      <div class="insta-sub-tabs">
+        <button class="insta-sub-tab active" id="subtab-btn-pending" onclick="switchInstaSubTab('pending')">
+          📋 업로드 전 <span class="insta-sub-count" id="subtab-count-pending">${totalPending}</span>
+        </button>
+        <button class="insta-sub-tab" id="subtab-btn-done" onclick="switchInstaSubTab('done')">
+          ✅ 업로드 완료 <span class="insta-sub-count" id="subtab-count-done">${totalUploaded}</span>
+        </button>
+      </div>
+      <div id="insta-cards-wrap">${cardsHtml}</div>
+      <div id="insta-empty-msg" style="display:none"></div>`;
+
+    _currentSubTab = 'pending';
+    applySubTabFilter();
 
   } catch {
     el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
@@ -2482,17 +2586,29 @@ async function searchAllProductNames(cardIdx) {
 function renderInstaCard(item, i, isTodayPick = false) {
   const rawCaption = item.caption || '';
   const cleanedCap = cleanInstagramCaption(rawCaption);
-  const products   = parseInstagramCaption(rawCaption);
   const preview    = cleanedCap.slice(0, 120).replace(/\n/g, ' ');
   const authorId   = extractUsernameFromCaption(rawCaption) || item.username || '크리에이터';
   const ago        = timeAgo(item.collectedAt);
-  _instaData[i]    = { products, username: authorId, rawCaption, isTodayPick };
+
+  // 저장된 제품 데이터 우선, 없으면 캡션 파싱
+  const saved    = _queueData[item.id] || {};
+  const products = (saved.products && saved.products.length)
+    ? saved.products
+    : parseInstagramCaption(rawCaption);
+  const isUploaded = !!saved.uploaded;
+
+  _instaData[i] = { products, username: authorId, rawCaption, isTodayPick, itemId: item.id };
 
   const productRows = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
 
   const postText = buildInstaPost(products, authorId, []);
 
-  return `<div class="insta-card${isTodayPick ? ' today-pick' : ''}" id="insta-card-${i}">
+  const uploadBtnHtml = isUploaded
+    ? `<button class="btn-upload-undo" id="upload-btn-${i}" onclick="markUploaded(${i}, false)">↩ 업로드 전으로 되돌리기</button>`
+    : `<button class="btn-upload-done" id="upload-btn-${i}" onclick="markUploaded(${i}, true)">✅ 업로드 완료로 표시</button>`;
+
+  return `<div class="insta-card${isTodayPick ? ' today-pick' : ''}" id="insta-card-${i}"
+      data-item-id="${esc(item.id || '')}" data-uploaded="${isUploaded ? '1' : '0'}">
     <div class="insta-header" onclick="toggleInsta(${i})">
       ${item.image ? `<img class="insta-thumb" src="${esc(item.image)}" onerror="this.style.display='none'">` : '<div class="insta-thumb"></div>'}
       <div class="insta-info">
@@ -2500,6 +2616,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
           @${esc(authorId)}
           ${isTodayPick ? '<span class="today-badge">오늘의픽</span>' : ''}
           ${item.todayPick && isIdolCaption(rawCaption) ? '<span class="idol-badge">아이돌</span>' : ''}
+          ${isUploaded ? '<span class="upload-done-badge">✅ 업로드 완료</span>' : ''}
         </div>
         <div class="caption-preview">${esc(preview)}</div>
         <div class="pick-stats" style="margin-top:.35rem">
@@ -2531,7 +2648,8 @@ function renderInstaCard(item, i, isTodayPick = false) {
           📋 게시물 텍스트 (편집 후 복사)
         </label>
         <textarea class="pick-output" id="insta-post-${i}" rows="18">${esc(postText)}</textarea>
-        <div class="btn-row">
+        <div class="btn-row" style="justify-content:space-between;align-items:center">
+          ${uploadBtnHtml}
           <button class="btn btn-sm btn-copy" onclick="copyInstaPost(${i})">📋 복사</button>
         </div>
       </div>
@@ -2540,6 +2658,178 @@ function renderInstaCard(item, i, isTodayPick = false) {
 }
 
 const _instaData = {};
+
+// ══════════════════════════════════════════════════════════════
+//  큐 데이터 동기화 (서버 + localStorage)
+// ══════════════════════════════════════════════════════════════
+let _queueData = {};       // { itemId: { products:[...], uploaded:false, uploadedAt:null } }
+let _serverUrl = (load('_mss_server_url') || 'http://localhost:3001').replace(/\/$/, '');
+let _currentSubTab = 'pending';
+const _savePendingTimers = {};
+
+function updateServerUrl(val) {
+  _serverUrl = (val || 'http://localhost:3001').replace(/\/$/, '');
+  save('_mss_server_url', _serverUrl);
+}
+
+function setSyncStatus(status, detail) {
+  const dot = $id('syncDot');
+  const txt = $id('syncTxt');
+  if (!dot || !txt) return;
+  dot.className = `sync-dot ${status}`;
+  if (detail) {
+    txt.textContent = detail;
+  } else if (status === 'online') {
+    txt.textContent = '서버 동기화됨 ✓';
+  } else if (status === 'saving') {
+    txt.textContent = '저장 중...';
+  } else {
+    txt.textContent = '로컬 저장 (서버 오프라인)';
+  }
+}
+
+async function checkSyncServer() {
+  setSyncStatus('saving', '연결 확인 중...');
+  try {
+    const r = await fetch(`${_serverUrl}/health`, { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined });
+    if (r.ok) {
+      setSyncStatus('online');
+      return true;
+    }
+  } catch {}
+  setSyncStatus('offline');
+  return false;
+}
+
+async function loadQueueData() {
+  // 1순위: 서버
+  try {
+    const r = await fetch(`${_serverUrl}/api/queue-data`,
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined });
+    if (r.ok) {
+      _queueData = await r.json();
+      save('_mss_queue_data', JSON.stringify(_queueData));
+      setSyncStatus('online');
+      return;
+    }
+  } catch {}
+  // 2순위: localStorage
+  try {
+    const s = load('_mss_queue_data');
+    if (s) _queueData = JSON.parse(s);
+  } catch {}
+  setSyncStatus('offline');
+}
+
+function scheduleQueueSave(itemId) {
+  clearTimeout(_savePendingTimers[itemId]);
+  _savePendingTimers[itemId] = setTimeout(() => flushQueueSave(), 900);
+}
+
+async function flushQueueSave() {
+  save('_mss_queue_data', JSON.stringify(_queueData));
+  setSyncStatus('saving');
+  try {
+    const r = await fetch(`${_serverUrl}/api/queue-data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_queueData),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
+    });
+    setSyncStatus(r.ok ? 'online' : 'offline');
+  } catch {
+    setSyncStatus('offline');
+  }
+}
+
+// ── 업로드 완료 토글 ────────────────────────────────────────
+function markUploaded(cardIdx, uploaded) {
+  const card = document.getElementById(`insta-card-${cardIdx}`);
+  if (!card) return;
+  const itemId = card.dataset.itemId;
+  if (!_queueData[itemId]) _queueData[itemId] = {};
+  _queueData[itemId].uploaded  = uploaded;
+  _queueData[itemId].uploadedAt = uploaded ? new Date().toISOString() : null;
+
+  card.dataset.uploaded = uploaded ? '1' : '0';
+  _refreshUploadBtn(cardIdx, uploaded);
+  applySubTabFilter();
+  updateSubTabCounts();
+  scheduleQueueSave(itemId);
+}
+
+function _refreshUploadBtn(cardIdx, uploaded) {
+  const card = $id(`insta-card-${cardIdx}`);
+  const btn  = $id(`upload-btn-${cardIdx}`);
+
+  // 헤더 배지 동기화
+  if (card) {
+    const existing = card.querySelector('.upload-done-badge');
+    if (uploaded && !existing) {
+      card.querySelector('.username')?.insertAdjacentHTML(
+        'beforeend', '<span class="upload-done-badge">✅ 업로드 완료</span>');
+    } else if (!uploaded && existing) {
+      existing.remove();
+    }
+  }
+
+  if (!btn) return;
+  if (uploaded) {
+    btn.className = 'btn-upload-undo';
+    btn.innerHTML = '↩ 업로드 전으로 되돌리기';
+    btn.onclick = () => markUploaded(cardIdx, false);
+  } else {
+    btn.className = 'btn-upload-done';
+    btn.innerHTML = '✅ 업로드 완료로 표시';
+    btn.onclick = () => markUploaded(cardIdx, true);
+  }
+}
+
+// ── 서브탭 전환 ──────────────────────────────────────────────
+function switchInstaSubTab(tab) {
+  _currentSubTab = tab;
+  ['pending','done'].forEach(t => {
+    const btn = $id(`subtab-btn-${t}`);
+    if (!btn) return;
+    btn.classList.toggle('active', t === tab);
+    if (t === 'done') btn.classList.toggle('done-tab', tab === 'done' && t === 'done');
+  });
+  applySubTabFilter();
+}
+
+function applySubTabFilter() {
+  document.querySelectorAll('.insta-card').forEach(card => {
+    const isUploaded = card.dataset.uploaded === '1';
+    card.style.display = (_currentSubTab === 'done' ? isUploaded : !isUploaded) ? '' : 'none';
+  });
+  // 섹션 헤더가 빈 경우 숨김
+  document.querySelectorAll('.queue-section-header').forEach(hdr => {
+    let sib = hdr.nextElementSibling;
+    let anyVisible = false;
+    while (sib && !sib.classList.contains('queue-section-header')) {
+      if (sib.classList.contains('insta-card') && sib.style.display !== 'none') { anyVisible = true; break; }
+      sib = sib.nextElementSibling;
+    }
+    hdr.style.display = anyVisible ? '' : 'none';
+  });
+  // 빈 탭 안내
+  const content = $id('insta-cards-wrap');
+  const empty   = $id('insta-empty-msg');
+  if (!content || !empty) return;
+  const anyVisible = [...document.querySelectorAll('.insta-card')].some(c => c.style.display !== 'none');
+  empty.style.display = anyVisible ? 'none' : '';
+  empty.innerHTML = _currentSubTab === 'done'
+    ? '<div class="status info" style="text-align:center">아직 업로드 완료된 항목이 없습니다.</div>'
+    : '<div class="status info" style="text-align:center">업로드 전 항목이 없습니다. 🎉</div>';
+}
+
+function updateSubTabCounts() {
+  const all     = document.querySelectorAll('.insta-card');
+  const doneN   = [...all].filter(c => c.dataset.uploaded === '1').length;
+  const pendN   = all.length - doneN;
+  const pe = $id('subtab-count-pending'); if (pe) pe.textContent = pendN;
+  const de = $id('subtab-count-done');    if (de) de.textContent = doneN;
+}
 
 const _IDOL_KW_UI = ['아이브','뉴진스','에스파','블랙핑크','트와이스','세븐틴','르세라핌','ive','newjeans','aespa','blackpink','twice','lesserafim','아이유','선미','화사','청하','이효리'];
 function isIdolCaption(caption) {
@@ -2721,7 +3011,7 @@ function buildInstaPost(products, authorId, extraHashtags) {
   return out.trimEnd();
 }
 
-// 셀 편집 시 게시물 텍스트 실시간 업데이트 (카테고리·제품명·호수·가격·링크 전부)
+// 셀 편집 시 게시물 텍스트 실시간 업데이트 + 자동 저장
 function updateInstaPost(cardIdx) {
   const stored = _instaData[cardIdx];
   if (!stored) return;
@@ -2737,6 +3027,13 @@ function updateInstaPost(cardIdx) {
   }).filter(p => p.name);
 
   $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, []);
+
+  // 서버 + localStorage에 자동 저장
+  if (stored.itemId) {
+    if (!_queueData[stored.itemId]) _queueData[stored.itemId] = {};
+    _queueData[stored.itemId].products = products;
+    scheduleQueueSave(stored.itemId);
+  }
 }
 
 function toggleInsta(i) {
