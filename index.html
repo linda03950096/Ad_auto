@@ -1668,19 +1668,37 @@ async function loadInstaQueue() {
       return;
     }
 
-    const todayPicks = items.filter(i => i.todayPick && !_queueData[i.id]?.deleted);
-    const olderItems = items.filter(i => !i.todayPick && !_queueData[i.id]?.deleted);
+    const visibleItems = items.filter(i => !_queueData[i.id]?.deleted);
 
-    const noProductCount = todayPicks.filter(item =>
-      parseInstagramCaption(item.caption || '').length === 0 &&
-      !(_queueData[item.id]?.products?.length)
-    ).length;
+    // 날짜별 그룹핑 (collectedAt 기준, 없으면 '날짜미상')
+    const todayKey = new Date().toLocaleDateString('sv'); // "YYYY-MM-DD"
+    const byDate = {};
+    visibleItems.forEach(item => {
+      const dk = item.collectedAt ? item.collectedAt.slice(0, 10) : '날짜미상';
+      (byDate[dk] = byDate[dk] || []).push(item);
+    });
+    const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
 
+    function _fmtDate(dk) {
+      if (dk === '날짜미상') return '📦 날짜 미상';
+      const [y, m, d] = dk.split('-');
+      const isToday = dk === todayKey;
+      return `📅 ${y}년 ${parseInt(m)}월 ${parseInt(d)}일${isToday ? ' <span style="font-size:.75rem;color:var(--pink-dark);font-weight:700">오늘</span>' : ''}`;
+    }
+
+    let cardIdx = 0;
     let cardsHtml = '';
-    if (todayPicks.length) {
-      cardsHtml += `<div class="queue-section-header">
-        📅 오늘의 큐 <span class="queue-count">${todayPicks.length}개</span>
-        <span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>
+    for (const dk of sortedDates) {
+      const group = byDate[dk];
+      const isToday = dk === todayKey;
+      const noProductCount = isToday ? group.filter(item =>
+        parseInstagramCaption(item.caption || '').length === 0 &&
+        !(_queueData[item.id]?.products?.length)
+      ).length : 0;
+
+      cardsHtml += `<div class="queue-section-header"${cardIdx > 0 ? ' style="margin-top:1.5rem"' : ''}>
+        ${_fmtDate(dk)} <span class="queue-count">${group.length}개</span>
+        ${isToday ? '<span style="font-size:.78rem;color:var(--muted);font-weight:400">가격·링크만 입력하면 즉시 게시 가능</span>' : ''}
         ${noProductCount > 0 ? `
         <button id="btn-ai-enrich" onclick="startAiEnrich(this)"
           style="margin-left:auto;font-size:.76rem;padding:.28rem .7rem;border-radius:8px;
@@ -1688,17 +1706,11 @@ async function loadInstaQueue() {
           ✨ AI 제품 분석 (${noProductCount}개)
         </button>` : ''}
       </div>`;
-      cardsHtml += todayPicks.map((item, i) => renderInstaCard(item, i, true)).join('');
-    }
-    if (olderItems.length) {
-      cardsHtml += `<div class="queue-section-header" style="margin-top:1.5rem">
-        📦 이전 수집 <span class="queue-count">${olderItems.length}개</span>
-      </div>`;
-      cardsHtml += olderItems.map((item, i) => renderInstaCard(item, todayPicks.length + i, false)).join('');
+      cardsHtml += group.map(item => renderInstaCard(item, cardIdx++, item.todayPick)).join('');
     }
 
-    const totalUploaded = items.filter(it => _queueData[it.id]?.uploaded).length;
-    const totalPending  = items.length - totalUploaded;
+    const totalUploaded = visibleItems.filter(it => _queueData[it.id]?.uploaded).length;
+    const totalPending  = visibleItems.length - totalUploaded;
 
     el.innerHTML = `
       <div class="insta-sub-tabs">
