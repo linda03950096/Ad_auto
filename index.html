@@ -2060,10 +2060,24 @@ async function runImageAnalysis() {
 
 // 캡션 앞 메타("652 likes... - username - date: \"") 제거
 function cleanInstagramCaption(caption) {
-  return caption
-    .replace(/^\d[\d,]*\s*likes?[^"]*?"/, '')
+  let text = caption
+    .replace(/^\d[\d,]*[KkMm]?\s*likes?[^"]*?"/, '')  // "48 likes..." / "21K likes..."
     .replace(/"\.?\s*$/, '')
     .trim();
+
+  // 줄 중간에 카테고리 키워드가 나오면 줄바꿈 삽입 (한 줄 캡션 대응)
+  const inlineKws = [
+    '립스틱','립틴트','립글로스','립밤','아이섀도우','섀도우','쉐도우',
+    '블러셔','블러쉬','볼터치','볼블러셔','치크','하이라이터','마스카라',
+    '아이라이너','라이너','아이브로우','브로우','파운데이션','쿠션','컨실러',
+    '세팅파우더','픽서','컨투어','쉐딩','쉐이딩','프라이머',
+  ];
+  const kwPat = new RegExp('([ \\t]+)(' + inlineKws.join('|') + ')([ \\t])', 'g');
+  text = text.replace(kwPat, '\n$2$3');
+  // '립' 단독: 뒤에 한글/영어가 이어지는 경우만
+  text = text.replace(/([ \t]+)(립)([ \t]+[가-힣A-Za-z])/g, '\n$2$3');
+
+  return text;
 }
 
 // 캡션 메타에서 작성자 ID 추출 (21K / 1.2M likes 형식 + "username - date:" 형식 포함)
@@ -2906,12 +2920,29 @@ JSON 배열만 반환 (설명 없이):
 
 // ── AI 분석 버튼 핸들러 (수동 실행) ─────────────────────────
 async function startAiEnrich(btn) {
-  const geminiKey = load('_mss_geminikey'); // proxy 있으면 null이어도 OK
+  const geminiKey = load('_mss_geminikey');
+
+  // 프록시 연결 확인
+  let proxyOk = false;
+  try {
+    const r = await fetch('http://localhost:3001/health',
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined });
+    proxyOk = r.ok;
+  } catch {}
+
+  if (!proxyOk && !geminiKey) {
+    _showLookupToast(
+      '⚠️ Gemini API 키가 필요합니다\n' +
+      '✍️ 직접 분석 탭 → API 설정 → Gemini API Key 입력\n' +
+      '(Google AI Studio에서 무료 발급)', 'err');
+    return;
+  }
+
   btn.disabled = true;
   btn.innerHTML = '⏳ 분석 중…';
   try {
-    await enrichTodayPicksWithGemini(geminiKey);
-    btn.innerHTML = '✅ 분석 완료';
+    const done = await enrichTodayPicksWithGemini(geminiKey);
+    btn.innerHTML = done > 0 ? `✅ ${done}개 완료` : '✅ 완료 (새 제품 없음)';
   } catch {
     btn.innerHTML = '❌ 실패 - 다시 시도';
     btn.disabled = false;
@@ -2925,7 +2956,7 @@ async function enrichTodayPicksWithGemini(geminiKey) {
     .filter(([, d]) => d.isTodayPick && d.products.length === 0)
     .map(([i]) => Number(i))
     .slice(0, MAX_ENRICH);
-  if (!targets.length) { console.log('분석할 카드 없음 (이미 완료)'); return; }
+  if (!targets.length) { console.log('분석할 카드 없음 (이미 완료)'); return 0; }
   console.log(`✨ Gemini 분석 시작: ${targets.length}개 카드 (6.5초 간격)`);
 
   const btn = $id('btn-ai-enrich');
@@ -2969,7 +3000,7 @@ async function enrichTodayPicksWithGemini(geminiKey) {
       }
     }
   }
-  if (btn) btn.innerHTML = `✅ ${done}개 분석 완료`;
+  return done;
 }
 
 // 카테고리 표시 순서
