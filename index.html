@@ -472,6 +472,12 @@
       cursor: pointer; color: #dc2626; line-height: 1; transition: background .15s;
     }
     .btn-del-row:hover { background: #fee2e2; border-color: #ef4444; }
+    .btn-del-card {
+      margin-left: .4rem; flex-shrink: 0; border: none; background: transparent;
+      font-size: 1rem; cursor: pointer; opacity: .45; padding: .2rem .3rem;
+      border-radius: 6px; transition: opacity .15s, background .15s; line-height: 1;
+    }
+    .btn-del-card:hover { opacity: 1; background: #fee2e2; }
     .product-edit-header {
       display: grid; grid-template-columns: 1.2fr 1.6fr .9fr 1fr 1.6fr;
       gap: .4rem; font-size: .75rem; font-weight: 700; color: var(--muted);
@@ -1653,8 +1659,8 @@ async function loadInstaQueue() {
       return;
     }
 
-    const todayPicks = items.filter(i => i.todayPick);
-    const olderItems = items.filter(i => !i.todayPick);
+    const todayPicks = items.filter(i => i.todayPick && !_queueData[i.id]?.deleted);
+    const olderItems = items.filter(i => !i.todayPick && !_queueData[i.id]?.deleted);
 
     const noProductCount = todayPicks.filter(item =>
       parseInstagramCaption(item.caption || '').length === 0 &&
@@ -2167,6 +2173,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
         </div>
       </div>
       <span class="pick-toggle">▼</span>
+      <button class="btn-del-card" onclick="event.stopPropagation(); deleteInstaCard(${i})" title="큐에서 삭제">🗑</button>
     </div>
 
     <div class="insta-body">
@@ -2281,6 +2288,22 @@ async function flushQueueSave() {
   } catch {
     setSyncStatus('offline');
   }
+}
+
+// ── 카드 삭제 ────────────────────────────────────────────────
+function deleteInstaCard(cardIdx) {
+  const card = document.getElementById(`insta-card-${cardIdx}`);
+  if (!card) return;
+  const itemId = card.dataset.itemId;
+  if (!confirm('이 항목을 큐에서 삭제할까요?')) return;
+
+  card.remove();
+  if (itemId) {
+    if (!_queueData[itemId]) _queueData[itemId] = {};
+    _queueData[itemId].deleted = true;
+    scheduleQueueSave(itemId);
+  }
+  updateSubTabCounts();
 }
 
 // ── 업로드 완료 토글 ────────────────────────────────────────
