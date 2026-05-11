@@ -1,8 +1,30 @@
 {
   "geminiKey": "",
   "chromeProfileDir": ".instagram-profile",
+  "twitterProfileDir": ".twitter-profile",
   "headless": false,
   "scrollsPerSource": 3,
+  "twitterHashtags": [
+    "아이돌메이크업",
+    "손민수메이크업",
+    "연예인메이크업",
+    "메이크업정보",
+    "메이크업추천",
+    "koreanmakeup",
+    "idolmakeup",
+    "kpopmakeup"
+  ],
+  "twitterKeywords": [
+    "메이크업 정보",
+    "아이돌 메이크업",
+    "연예인 메이크업",
+    "손민수 메이크업",
+    "idol makeup",
+    "kpop makeup",
+    "메이크업 추천",
+    "뷰티 정보"
+  ],
+  "twitterAccounts": [],
   "publishToGit": false,
   "minLikes": 300,
   "bigAccountMinFollowers": 30000,
@@ -18,45 +40,60 @@
       "sourceType": "saved"
     },
     {
-      "label": "#아이돌메이크업",
-      "url": "https://www.instagram.com/explore/tags/아이돌메이크업/",
-      "sourceType": "hashtag"
-    },
-    {
       "label": "#손민수메이크업",
       "url": "https://www.instagram.com/explore/tags/손민수메이크업/",
       "sourceType": "hashtag"
     },
     {
-      "label": "#메이크업",
-      "url": "https://www.instagram.com/explore/tags/메이크업/",
+      "label": "#아이돌메이크업",
+      "url": "https://www.instagram.com/explore/tags/아이돌메이크업/",
       "sourceType": "hashtag"
     },
     {
-      "label": "#뷰티",
-      "url": "https://www.instagram.com/explore/tags/뷰티/",
+      "label": "#메이크업정보",
+      "url": "https://www.instagram.com/explore/tags/메이크업정보/",
       "sourceType": "hashtag"
     },
     {
-      "label": "#makeup",
-      "url": "https://www.instagram.com/explore/tags/makeup/",
+      "label": "#뷰티정보",
+      "url": "https://www.instagram.com/explore/tags/뷰티정보/",
       "sourceType": "hashtag"
     },
     {
-      "label": "#메이크업추천",
-      "url": "https://www.instagram.com/explore/tags/메이크업추천/",
-      "sourceType": "hashtag"
-    },
-    {
-      "label": "#뷰티스타그램",
-      "url": "https://www.instagram.com/explore/tags/뷰티스타그램/",
+      "label": "#메이크업아티스트",
+      "url": "https://www.instagram.com/explore/tags/메이크업아티스트/",
       "sourceType": "hashtag"
     },
     {
       "label": "#koreanmakeup",
       "url": "https://www.instagram.com/explore/tags/koreanmakeup/",
       "sourceType": "hashtag"
+    },
+    {
+      "label": "#메이크업추천",
+      "url": "https://www.instagram.com/explore/tags/메이크업추천/",
+      "sourceType": "hashtag"
     }
   ],
-  "accounts": []
+  "accounts": [
+    "songmakeup_",
+    "bm_jjin",
+    "dispatch_beauty",
+    "lummir_makeup",
+    "hongon_class",
+    "rizzroom_",
+    "lovely_mo.d",
+    "ondo.palette",
+    "dailybeauty_wellness",
+    "makeup_by_baeum",
+    "9ek__",
+    "helenabella_makeup",
+    "bmmakeupofficial",
+    "dailymua_",
+    "make.sohui",
+    "hyerim_mua",
+    "artist_jieun",
+    "mua_jj",
+    "chloekangmakeup"
+  ]
 }
