@@ -224,8 +224,85 @@ let _rateLimitStreak = 0;
 const RATE_LIMIT_BAIL = 3; // 연속 3회 429 → 스크랩 중단
 
 async function enrichPost(page, item) {
+  // shortcode 추출 (예: https://www.instagram.com/p/ABC123/ → ABC123)
+  const shortcodeMatch = item.url.match(/\/(p|reel)\/([A-Za-z0-9_-]+)/);
+  const shortcode = shortcodeMatch?.[2] || null;
+
+  // ── 1단계: embed URL 시도 (공개, 로그인 불필요) ────────────
+  if (shortcode) {
+    try {
+      const embedUrl = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+      console.log(`  Enriching (embed): ${embedUrl}`);
+      await page.goto(embedUrl, { waitUntil: "domcontentloaded", timeout: 40000 });
+      await page.waitForTimeout(2000);
+
+      const embedDetails = await page.evaluate(() => {
+        const bodyText = document.body?.innerText || "";
+        const bodyHtml  = document.body?.innerHTML || "";
+
+        // embed가 실패하면 본문이 거의 비어있음
+        if (bodyText.length < 30) return null;
+
+        // 캡션: .Caption, ._a9zs, article 내 텍스트
+        let caption = "";
+        for (const sel of [".Caption", "._a9zs", "article .C4VMK span", "article"]) {
+          const el = document.querySelector(sel);
+          const t = el?.innerText?.trim();
+          if (t && t.length > 10) { caption = t; break; }
+        }
+        // 캡션이 없으면 본문 전체에서 추출 시도
+        if (!caption) {
+          // embed HTML에서 <span> 태그들 중 가장 긴 것
+          const spans = [...document.querySelectorAll("span, p")];
+          const longest = spans.reduce((a, b) => (b.innerText?.length > a.innerText?.length ? b : a), { innerText: "" });
+          if (longest.innerText?.length > 10) caption = longest.innerText.trim();
+        }
+
+        // 사용자명: .UsernameText, ._aaqt, a[href*="/"] 등
+        let username = "";
+        for (const sel of [".UsernameText", "._aaqt", "a.UserName", ".user a"]) {
+          const el = document.querySelector(sel);
+          const t = el?.innerText?.trim();
+          if (t && t.length > 0) { username = t.replace(/^@/, ""); break; }
+        }
+        // href에서 추출 시도
+        if (!username) {
+          const a = document.querySelector("a[href^='/']");
+          if (a) username = a.getAttribute("href").replace(/\//g, "") || "";
+        }
+
+        // 이미지: og:image 또는 img 태그
+        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute("content") || "";
+        const imgSrc  = document.querySelector("img.EmbedVideo, img")?.src || "";
+        const image   = ogImage || imgSrc;
+
+        // 게시 날짜
+        const timeEl  = document.querySelector("time[datetime]");
+        const postedAt = timeEl?.getAttribute("datetime") || null;
+
+        // 좋아요 수
+        let likeText = "";
+        const m = bodyText.match(/(\d[\d,.]+)\s*(?:likes?|좋아요)/i);
+        if (m) likeText = m[0];
+
+        return { caption: caption.slice(0, 4000), username, image, postedAt, likeText };
+      });
+
+      if (embedDetails && (embedDetails.caption || embedDetails.username)) {
+        _rateLimitStreak = 0;
+        const likes = parseLikeCount(embedDetails.likeText);
+        console.log(`  ✅ embed 성공 @${embedDetails.username || "?"} caption=${embedDetails.caption.slice(0,40)}...`);
+        return { ...item, ...embedDetails, likes: likes ?? null, status: "enriched", enrichedAt: nowIso() };
+      }
+      console.log(`  embed 응답 비어있음, 직접 URL 시도...`);
+    } catch (e) {
+      console.log(`  embed 실패 (${e.message}), 직접 URL 시도...`);
+    }
+  }
+
+  // ── 2단계: 직접 포스트 URL 시도 (로그인 세션 활용) ─────────
   try {
-    console.log(`  Enriching: ${item.url}`);
+    console.log(`  Enriching (direct): ${item.url}`);
     await page.goto(item.url, { waitUntil: "domcontentloaded", timeout: 40000 });
     await page.waitForTimeout(3000);
 
@@ -233,14 +310,13 @@ async function enrichPost(page, item) {
       const meta = (prop) =>
         document.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`)?.getAttribute("content") || "";
 
-      // Rate-limit/로그인 페이지 감지: URL이 바뀌었거나 title이 단순 "Instagram"
       const currentUrl = location.href;
       const isRateLimited =
-        !currentUrl.includes("/p/") && !currentUrl.includes("/reel") ||
+        (!currentUrl.includes("/p/") && !currentUrl.includes("/reel")) ||
         document.title === "Instagram" ||
         document.title === "페이지를 사용할 수 없음" ||
         document.body.innerText.includes("Too many requests") ||
-        document.body.innerText.includes("로그인") && document.body.innerText.length < 2000;
+        (document.body.innerText.includes("로그인") && document.body.innerText.length < 2000);
 
       let caption = "";
       for (const sel of ["h1", "article div > span > span", "article span"]) {
@@ -249,7 +325,6 @@ async function enrichPost(page, item) {
       }
       if (!caption) caption = meta("og:description");
 
-      // og:title에서 username 추출: "username on Instagram: ..." 또는 "username (@handle) ..."
       const titleMeta = meta("og:title");
       let username = "";
       const tm1 = titleMeta.match(/^([\w.]+)\s+on Instagram/i);
@@ -257,14 +332,11 @@ async function enrichPost(page, item) {
       if (tm1) username = tm1[1];
       else if (tm2) username = tm2[2];
       else username = titleMeta.match(/^@?([\w.]+)/)?.[1] || "";
-      // "Instagram" 단독은 rate-limit 증거
       if (username.toLowerCase() === "instagram") username = "";
 
-      // 게시 날짜
       const timeEl  = document.querySelector("time[datetime]");
       const postedAt = timeEl?.getAttribute("datetime") || null;
 
-      // 좋아요 수
       let likeText = "";
       const likeEl = document.querySelector('[aria-label*="like"], [aria-label*="좋아요"]');
       if (likeEl) likeText = likeEl.getAttribute("aria-label") || likeEl.textContent || "";
@@ -278,22 +350,21 @@ async function enrichPost(page, item) {
       return { caption: caption.slice(0, 4000), image: meta("og:image"), username, postedAt, likeText, isRateLimited };
     });
 
-    // Rate-limit 감지 시 streak 증가 후 bail-out 체크
     if (details.isRateLimited) {
       _rateLimitStreak++;
       console.warn(`  ⚠️  Rate-limit 감지 (${_rateLimitStreak}/${RATE_LIMIT_BAIL}): ${item.url}`);
       if (_rateLimitStreak >= RATE_LIMIT_BAIL) {
-        console.error(`  🚫 연속 ${RATE_LIMIT_BAIL}회 rate-limit → 스크랩 중단. 내일 다시 시도하세요.`);
+        console.error(`  🚫 연속 ${RATE_LIMIT_BAIL}회 rate-limit → 스크랩 중단.`);
         return { ...item, status: "rate-limited", rateLimitedAt: nowIso() };
       }
-      // 10초 대기 후 재시도 없이 enrich-failed로 저장 (다음 실행에서 재시도)
       await page.waitForTimeout(10000);
       return { ...item, status: "enrich-failed" };
     }
 
-    _rateLimitStreak = 0; // 성공하면 streak 초기화
+    _rateLimitStreak = 0;
     const likes = parseLikeCount(details.likeText);
     const { isRateLimited: _, ...safeDetails } = details;
+    console.log(`  ✅ direct 성공 @${safeDetails.username || "?"}`);
     return { ...item, ...safeDetails, likes: likes ?? null, status: "enriched", enrichedAt: nowIso() };
   } catch (e) {
     console.error(`  Enrich failed (${item.url}): ${e.message}`);
@@ -341,10 +412,15 @@ async function main() {
   const config = await readJson(configPath, null);
   if (!config?.sources?.length) throw new Error(`No sources in ${configPath}`);
 
+  const ENRICH_ONLY      = process.argv.includes('--enrich-only');
   const MIN_LIKES        = config.minLikes              ?? 300;
   const BIG_ACCOUNT_THR  = config.bigAccountMinFollowers ?? 30000;
   const DAILY_PICK_COUNT = config.dailyPickCount         ?? 15;
-  const MAX_ENRICH       = config.maxEnrichPerRun        ?? 30; // 기본 30개 (429 방지)
+  // --enrich-only 모드: 한 번에 최대 300개 분석 (새 수집 없이 기존 미분석 항목 처리)
+  // 일반 모드: 기본 80개
+  const MAX_ENRICH       = ENRICH_ONLY
+    ? (config.maxEnrichOnlyPerRun ?? 300)
+    : (config.maxEnrichPerRun     ?? 80);
 
   let pw;
   try { pw = await import("playwright"); }
@@ -357,38 +433,104 @@ async function main() {
   const context = await pw.chromium.launchPersistentContext(profileDir, {
     headless: Boolean(config.headless),
     viewport: { width: 1280, height: 900 },
+    args: [
+      '--no-sandbox', '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--lang=ko-KR',
+    ],
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    locale: 'ko-KR',
+  });
+
+  // 봇 감지 우회 (모든 페이지에 적용)
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['ko-KR', 'ko', 'en-US', 'en'] });
   });
   const page = context.pages()[0] || await context.newPage();
 
+  // ── 로그인 확인 ───────────────────────────────────────────────
+  console.log('📲 인스타그램 로그인 상태 확인 중...');
+  await page.goto('https://www.instagram.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(2000);
+  const isLoggedIn = await page.evaluate(() => {
+    const url = location.href;
+    const hasLoginForm = !!document.querySelector('input[name="username"]');
+    const hasLoginLink = document.body.innerText.includes('로그인') && document.body.innerText.length < 3000;
+    return !hasLoginForm && !hasLoginLink && (url.includes('instagram.com') && !url.includes('/accounts/login'));
+  });
+
+  if (!isLoggedIn) {
+    console.log('\n🔐 인스타그램 로그인이 필요합니다!');
+    console.log('   브라우저 창에서 인스타그램에 로그인해주세요.');
+    console.log('   로그인 완료 후 자동으로 수집이 시작됩니다. (최대 3분 대기)\n');
+    // 로그인 완료 대기 (피드 페이지로 이동되면 완료)
+    try {
+      await page.waitForFunction(
+        () => !document.querySelector('input[name="username"]') && location.href.includes('instagram.com'),
+        { timeout: 180000, polling: 2000 }
+      );
+      await page.waitForTimeout(2000);
+      console.log('✅ 로그인 완료! 수집을 시작합니다.\n');
+    } catch {
+      console.error('❌ 로그인 타임아웃. 다시 실행해주세요.');
+      await context.close();
+      return;
+    }
+  } else {
+    console.log('✅ 이미 로그인 상태입니다.\n');
+  }
+
+  // ── Ctrl+C / 오류 시 저장 보장 ─────────────────────────────
+  let _shouldStop = false;
+  const _onSigint = () => {
+    if (_shouldStop) { process.exit(1); } // 두 번 누르면 강제 종료
+    _shouldStop = true;
+    console.log('\n⚠️  중단 신호 감지 — 현재까지 수집된 데이터를 저장합니다...');
+    console.log('   (한 번 더 Ctrl+C 누르면 강제 종료)');
+  };
+  process.on('SIGINT', _onSigint);
+  process.on('SIGTERM', _onSigint);
+
+  // 3~5초 랜덤 대기 (rate-limit 방지)
+  const enrichDelay = () => new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
+
   let added = 0;
   try {
-    // 1단계: 해시태그 소스 수집
-    for (const source of config.sources) {
-      const items = await collectFromSource(page, source, Number(config.scrollsPerSource || 6));
-      for (const item of items) {
-        if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
+    if (ENRICH_ONLY) {
+      const pending = [...existing.values()].filter(i => i.status === 'new' || i.status === 'enrich-failed').length;
+      console.log(`📋 분석 전용 모드 — 미분석 항목 ${pending}개 처리 (최대 ${MAX_ENRICH}개)`);
+    } else {
+      // 1단계: 해시태그 소스 수집
+      for (const source of config.sources) {
+        if (_shouldStop) break;
+        const items = await collectFromSource(page, source, Number(config.scrollsPerSource || 6));
+        for (const item of items) {
+          if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
+        }
       }
-    }
 
-    // 팔로우한 계정 수집 (sourceType: "account")
-    for (const account of (config.accounts || [])) {
-      if (!account) continue;
-      const src = { label: `@${account}`, url: `https://www.instagram.com/${account}/`, sourceType: "account" };
-      const items = await collectFromSource(page, src, Number(config.scrollsPerSource || 6));
-      for (const item of items) {
-        if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
+      // 팔로우한 계정 수집 (sourceType: "account")
+      for (const account of (config.accounts || [])) {
+        if (_shouldStop) break;
+        if (!account) continue;
+        const src = { label: `@${account}`, url: `https://www.instagram.com/${account}/`, sourceType: "account" };
+        const items = await collectFromSource(page, src, Number(config.scrollsPerSource || 6));
+        for (const item of items) {
+          if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
+        }
       }
     }
 
     console.log(`\nFound ${added} new post(s). Enriching (max ${MAX_ENRICH})...`);
 
     // 2단계: 새 포스트 상세 스크랩 (최대 MAX_ENRICH개)
-    // 요청 간격: 3~5초 랜덤 (rate-limit 방지)
-    const enrichDelay = () => new Promise(r => setTimeout(r, 3000 + Math.random() * 2000));
     let enrichCount = 0;
     let bailOut = false;
     for (const [key, item] of existing) {
-      if (bailOut) break;
+      if (bailOut || _shouldStop) break;
       if (item.status !== "new" && item.status !== "enrich-failed") continue;
       if (enrichCount >= MAX_ENRICH) break;
       const enriched = await enrichPost(page, item);
@@ -398,19 +540,24 @@ async function main() {
       await enrichDelay();
     }
 
-    // 2.5단계: 미등록 브랜드 이름 자동 수집
-    const allCaptions = [...existing.values()].map(i => i.caption || '');
-    await autoDiscoverBrands(page, allCaptions, config);
+    if (!_shouldStop) {
+      // 2.5단계: 미등록 브랜드 이름 자동 수집
+      const allCaptions = [...existing.values()].map(i => i.caption || '');
+      await autoDiscoverBrands(page, allCaptions, config);
+    }
 
-    // 3단계: 필터링
+    // 3단계: 필터링 — 탈락 항목은 삭제하지 않고 "filtered"로 유지
+    // → 다음 크롤링 시 existing.has(id) 로 재수집 방지
+    const _filter = (key, item, reason) => {
+      console.log(`  ❌ ${reason}: ${item.url}`);
+      existing.set(key, { ...item, status: 'filtered', filteredReason: reason, filteredAt: nowIso() });
+    };
+
     for (const [key, item] of existing) {
       if (item.status !== "enriched") continue;
 
       // 광고는 무조건 제외 (모든 소스)
-      if (isAdPost(item.caption)) {
-        console.log(`  ❌ 광고: ${item.url}`);
-        existing.delete(key); continue;
-      }
+      if (isAdPost(item.caption)) { _filter(key, item, '광고'); continue; }
 
       const type = item.sourceType || "hashtag";
 
@@ -421,18 +568,12 @@ async function main() {
 
       if (type === "account") {
         // 팔로우 계정: 제품 정보 있으면 통과 (좋아요/날짜 무관)
-        if (!hasProductInfo(item.caption)) {
-          console.log(`  ❌ 제품 없음(팔로우계정): ${item.url}`);
-          existing.delete(key);
-        }
+        if (!hasProductInfo(item.caption)) _filter(key, item, '제품 없음(팔로우계정)');
         continue;
       }
 
       // hashtag 소스: 제품 정보 없으면 제외
-      if (!hasProductInfo(item.caption)) {
-        console.log(`  ❌ 제품 없음: ${item.url}`);
-        existing.delete(key); continue;
-      }
+      if (!hasProductInfo(item.caption)) { _filter(key, item, '제품 없음'); continue; }
 
       // 구조화 제품 리스트("카테고리 @brand 컬러") → 좋아요 무관 통과
       if (hasStructuredProductList(item.caption)) {
@@ -444,37 +585,81 @@ async function main() {
       if (item.likes !== null && item.likes < MIN_LIKES) {
         const followers = await getFollowerCount(page, item.username);
         if (followers === null || followers < BIG_ACCOUNT_THR) {
-          console.log(`  ❌ 좋아요 ${item.likes ?? '?'} / 팔로워 ${followers ?? '?'}: ${item.url}`);
-          existing.delete(key); continue;
+          _filter(key, item, `좋아요 ${item.likes ?? '?'} / 팔로워 ${followers ?? '?'}`);
+          continue;
         }
         console.log(`  ✅ 대형계정(팔로워 ${followers}): ${item.url}`);
       }
     }
+  } catch (e) {
+    // 오류 발생해도 수집된 데이터는 저장
+    console.error(`\n⚠️  크롤링 중 오류 (수집된 데이터는 저장합니다): ${e.message}`);
+    _shouldStop = true;
   } finally {
-    await context.close();
+    process.off('SIGINT', _onSigint);
+    process.off('SIGTERM', _onSigint);
+    try { await context.close(); } catch {}
+  }
+
+  // ── 중단/완료 관계없이 항상 저장 ───────────────────────────
+  if (_shouldStop) {
+    console.log('💾 중단 지점까지 수집된 데이터를 저장합니다...');
   }
 
   // 점수 기반 정렬: 아이돌 > 구조화 제품리스트 > 좋아요
   const sorted = [...existing.values()].sort((a, b) => scorePost(b) - scorePost(a));
 
-  // 오늘 수집된 항목 중 상위 DAILY_PICK_COUNT개를 todayPick으로 태깅
-  const todayCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // todayPick 선정 — 로컬 자정 기준
+  const todayLocal = new Date();
+  todayLocal.setHours(0, 0, 0, 0);
+  const todayCutoff = todayLocal.toISOString();
+  // 7일 전 기준 (보충용)
+  const week7Ago = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // 기존 todayPick 초기화 (pickedAt도 함께 제거)
+  for (const item of sorted) { item.todayPick = false; delete item.pickedAt; }
+
+  // 1순위: 오늘 수집/Enrich된 항목 (filtered 제외)
   let pickCount = 0;
+  const _pickNow = nowIso();
   for (const item of sorted) {
-    const isToday = (item.collectedAt || '') >= todayCutoff;
-    item.todayPick = isToday && pickCount < DAILY_PICK_COUNT;
-    if (item.todayPick) pickCount++;
+    if (pickCount >= DAILY_PICK_COUNT) break;
+    if (item.status === 'filtered') continue;
+    const lastActivity = item.enrichedAt && item.enrichedAt > (item.collectedAt||'')
+      ? item.enrichedAt : (item.collectedAt || '');
+    const isToday = lastActivity >= todayCutoff;
+    const hasData = !!(item.caption?.trim() || item.username?.trim());
+    if (isToday && hasData) { item.todayPick = true; item.pickedAt = _pickNow; pickCount++; }
   }
 
-  // todayPick을 맨 앞으로
+  // 2순위: 오늘 것만으로 부족하면 최근 7일 베스트로 보충 (filtered 제외)
+  if (pickCount < DAILY_PICK_COUNT) {
+    for (const item of sorted) {
+      if (pickCount >= DAILY_PICK_COUNT) break;
+      if (item.todayPick || item.status === 'filtered') continue;
+      const lastActivity = item.enrichedAt && item.enrichedAt > (item.collectedAt||'')
+        ? item.enrichedAt : (item.collectedAt || '');
+      const isRecent = lastActivity >= week7Ago;
+      const hasData  = !!(item.caption?.trim() || item.username?.trim());
+      if (isRecent && hasData) { item.todayPick = true; item.pickedAt = _pickNow; pickCount++; }
+    }
+    if (pickCount > 0) console.log(`  📦 오늘 항목 부족 → 최근 7일 항목으로 보충 (총 ${pickCount}개)`);
+  }
+
+  // todayPick을 맨 앞으로, filtered는 맨 뒤에 (dedup용으로 유지)
   const items = [
     ...sorted.filter(i => i.todayPick),
-    ...sorted.filter(i => !i.todayPick),
+    ...sorted.filter(i => !i.todayPick && i.status !== 'filtered'),
+    ...sorted.filter(i => i.status === 'filtered'),
   ];
 
   const queueData = { generatedAt: nowIso(), items };
   await writeJson(queuePath, queueData);
-  console.log(`Done. Queue: ${items.length}개 (오늘 픽 ${pickCount}개)`);
+  if (_shouldStop) {
+    console.log(`✅ 저장 완료 (중단됨). Queue: ${items.length}개 (오늘 픽 ${pickCount}개)`);
+  } else {
+    console.log(`✅ 크롤링 완료. Queue: ${items.length}개 (오늘 픽 ${pickCount}개)`);
+  }
 
   // 추가 경로에도 동기화 (워크트리 등)
   for (const extraDir of (config.additionalQueuePaths || [])) {
