@@ -33,11 +33,28 @@
   "additionalQueuePaths": [
     ".claude/worktrees/silly-vaughan-79f2c2"
   ],
+  "autoHashtagCount": 8,
+  "autoHashtagMinCount": 2,
   "sources": [
     {
       "label": "저장한 게시물",
       "url": "https://www.instagram.com/saved/all-posts/",
       "sourceType": "saved"
+    },
+    {
+      "label": "홈 피드 (팔로잉)",
+      "url": "https://www.instagram.com/",
+      "sourceType": "following"
+    },
+    {
+      "label": "탐색 탭",
+      "url": "https://www.instagram.com/explore/",
+      "sourceType": "explore"
+    },
+    {
+      "label": "릴스",
+      "url": "https://www.instagram.com/reels/",
+      "sourceType": "reels"
     },
     {
       "label": "#손민수메이크업",

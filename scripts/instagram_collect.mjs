@@ -372,6 +372,54 @@ async function enrichPost(page, item) {
   }
 }
 
+// ── 기존 enriched 포스트에서 메이크업 해시태그 자동 추출 ──────
+// 팔로우 계정·홈피드·저장 게시물 캡션에서 자주 나오는 태그를 뽑아 추가 소스로 활용
+function autoDiscoverHashtagSources(existing, config) {
+  const maxCount  = config.autoHashtagCount    ?? 8;   // 최대 추가할 해시태그 수
+  const minOccur  = config.autoHashtagMinCount ?? 2;   // 최소 등장 횟수
+  const tagCount  = new Map();
+
+  const TRUSTED_TYPES = new Set(['account','following','saved']);
+  for (const item of existing.values()) {
+    if (!TRUSTED_TYPES.has(item.sourceType || '')) continue;
+    if (item.status !== 'enriched') continue;
+    const tags = (item.caption || '').match(/#[\w가-힣]+/g) || [];
+    for (const tag of tags) {
+      const clean = tag.toLowerCase();
+      tagCount.set(clean, (tagCount.get(clean) || 0) + 1);
+    }
+  }
+
+  // 이미 수집 중인 해시태그 URL 목록
+  const existingUrls = new Set(
+    (config.sources || []).map(s => s.url.toLowerCase())
+  );
+
+  const MAKEUP_HINTS = [
+    '메이크업','뷰티','아이','립','파운','쿠션','블러','쉐딩','하이라이',
+    '틴트','마스카라','컨실','섀도','컨투','makeup','beauty','cosmetic','kbeauty',
+  ];
+
+  return [...tagCount.entries()]
+    .filter(([tag, cnt]) => {
+      if (cnt < minOccur) return false;
+      if (!MAKEUP_HINTS.some(h => tag.includes(h))) return false;
+      const url = `https://www.instagram.com/explore/tags/${encodeURIComponent(tag.replace(/^#/, ''))}/`.toLowerCase();
+      return !existingUrls.has(url);
+    })
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxCount)
+    .map(([tag, cnt]) => {
+      const clean = tag.replace(/^#/, '');
+      console.log(`  🏷️  자동 발견 해시태그: ${tag} (${cnt}회)`);
+      return {
+        label:      `🔍 자동 ${tag}`,
+        url:        `https://www.instagram.com/explore/tags/${encodeURIComponent(clean)}/`,
+        sourceType: 'auto-hashtag',
+      };
+    });
+}
+
 // ── 피드 수집 (URL만) ──────────────────────────────────────
 async function collectFromSource(page, source, scrolls) {
   console.log(`Collecting: ${source.label} → ${source.url}`);
@@ -522,6 +570,21 @@ async function main() {
           if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
         }
       }
+
+      // 자동 해시태그 발견: 기존 팔로우/저장 게시물 캡션에서 자주 쓰는 메이크업 해시태그 추출
+      if (config.autoHashtagCount !== 0) {
+        const autoSources = autoDiscoverHashtagSources(existing, config);
+        if (autoSources.length) {
+          console.log(`\n🏷️  자동 발견 해시태그 ${autoSources.length}개 추가 수집`);
+          for (const src of autoSources) {
+            if (_shouldStop) break;
+            const items = await collectFromSource(page, src, Math.max(2, Number(config.scrollsPerSource || 6) - 2));
+            for (const item of items) {
+              if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
+            }
+          }
+        }
+      }
     }
 
     console.log(`\nFound ${added} new post(s). Enriching (max ${MAX_ENRICH})...`);
@@ -566,13 +629,19 @@ async function main() {
         continue;
       }
 
+      if (type === "following") {
+        // 홈 피드(팔로잉): 광고만 제외, 나머지 통과
+        // 내가 팔로우하는 사람들 게시물이므로 신뢰도 높음
+        continue;
+      }
+
       if (type === "account") {
         // 팔로우 계정: 제품 정보 있으면 통과 (좋아요/날짜 무관)
         if (!hasProductInfo(item.caption)) _filter(key, item, '제품 없음(팔로우계정)');
         continue;
       }
 
-      // hashtag 소스: 제품 정보 없으면 제외
+      // hashtag / explore / reels / auto-hashtag 소스: 제품 정보 없으면 제외
       if (!hasProductInfo(item.caption)) { _filter(key, item, '제품 없음'); continue; }
 
       // 구조화 제품 리스트("카테고리 @brand 컬러") → 좋아요 무관 통과
