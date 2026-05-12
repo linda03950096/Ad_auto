@@ -5,10 +5,42 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const configPath      = path.join(root, "instagram_sources.json");
-const queuePath       = path.join(root, "instagram_queue.json");
-const brandCachePath  = path.join(root, "instagram_brands_cache.json");
-const shouldPublish   = process.argv.includes("--publish");
+const configPath        = path.join(root, "instagram_sources.json");
+const queuePath         = path.join(root, "instagram_queue.json");
+const brandCachePath    = path.join(root, "instagram_brands_cache.json");
+const brandsLearnedPath = path.join(root, "brands_learned.json");
+const shouldPublish     = process.argv.includes("--publish");
+
+// ── Gemini API 직접 호출 (Node.js https) ───────────────────
+import https from "node:https";
+function callGemini(apiKey, prompt) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+    });
+    const req = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          resolve(text);
+        } catch { reject(new Error('Gemini 응답 파싱 실패')); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Gemini 타임아웃')); });
+    req.write(body);
+    req.end();
+  });
+}
 
 // 하드코딩된 브랜드 매핑 (index.html과 동기화)
 const BUILT_IN_BRANDS = new Set([
@@ -28,8 +60,6 @@ const BUILT_IN_BRANDS = new Set([
   'shiseido','tomfordbeauty','givenchybeauty','valentino.beauty','hourglasscosmetics',
 ]);
 
-// 크롤링 중 발견한 미등록 브랜드 캐시
-const brandCache = new Map();
 
 const nowIso = () => new Date().toISOString();
 
@@ -142,10 +172,10 @@ async function writeJson(file, data) {
   await fs.writeFile(file, JSON.stringify(data, null, 2) + "\n", "utf8");
 }
 
-// ── 팔로워 수 + 브랜드명 캐시 (프로필 방문, 세션 내 1회) ──
+// ── 팔로워 수 + 브랜드명 + 바이오 캐시 (프로필 방문, 세션 내 1회) ──
 const followerCache = new Map();
 async function visitProfile(page, username) {
-  if (!username) return { followers: null, displayName: null };
+  if (!username) return { followers: null, displayName: null, bio: null };
   if (followerCache.has(username)) return followerCache.get(username);
   try {
     await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -164,12 +194,17 @@ async function visitProfile(page, username) {
       // 페이지 타이틀에서 표시 이름 추출: "모우모우 (@moumou_official_) • Instagram..."
       const titleMatch = document.title.match(/^(.+?)\s*\(@/);
       const displayName = titleMatch ? titleMatch[1].trim() : null;
-      return { followers, displayName };
+      // og:description에서 바이오 추출 (팔로워 수, 포스트 수 뒤에 바이오가 있음)
+      const ogDesc = document.querySelector('meta[property="og:description"]')?.content || '';
+      // 형식: "X Followers, Y Following, Z Posts - See Instagram photos and videos from ..."
+      // 바이오는 페이지 본문의 특정 영역에 있음
+      const bio = ogDesc.replace(/^[\d,.]+ Followers.*?- /i, '').slice(0, 200).trim() || null;
+      return { followers, displayName, bio };
     });
     followerCache.set(username, result);
     return result;
   } catch {
-    const result = { followers: null, displayName: null };
+    const result = { followers: null, displayName: null, bio: null };
     followerCache.set(username, result);
     return result;
   }
@@ -178,44 +213,145 @@ async function getFollowerCount(page, username) {
   return (await visitProfile(page, username)).followers;
 }
 
-// ── 미등록 브랜드 이름 자동 수집 ──────────────────────────
+// ── 미등록 브랜드 자동 학습 (Instagram @멘션 → Gemini 분류 → brands_learned.json) ──
+const brandCache = new Map();   // handle → koreanName (beauty only, 기존 호환)
+const brandsLearned = new Map(); // handle → { koreanName, isBeauty, learnedAt }
+
 async function loadBrandCache() {
   const data = await readJson(brandCachePath, {});
   for (const [k, v] of Object.entries(data)) brandCache.set(k.toLowerCase(), v);
 }
+async function loadBrandsLearned() {
+  const data = await readJson(brandsLearnedPath, {});
+  for (const [k, v] of Object.entries(data)) brandsLearned.set(k.toLowerCase(), v);
+}
 async function saveBrandCache(config) {
   const obj = Object.fromEntries(brandCache);
   await writeJson(brandCachePath, obj);
+  // worktree/GitHub Pages 디렉터리에도 동기화
   for (const extraDir of (config.additionalQueuePaths || [])) {
     try {
       await writeJson(path.resolve(root, extraDir, "instagram_brands_cache.json"), obj);
     } catch {}
   }
 }
+async function saveBrandsLearned(config) {
+  const obj = Object.fromEntries(brandsLearned);
+  await writeJson(brandsLearnedPath, obj);
+  for (const extraDir of (config.additionalQueuePaths || [])) {
+    try {
+      await writeJson(path.resolve(root, extraDir, "brands_learned.json"), obj);
+    } catch {}
+  }
+}
+
+// Gemini로 계정 목록을 뷰티 브랜드인지 일괄 분류
+async function classifyBrandsWithGemini(apiKey, accountInfos) {
+  // accountInfos: [{ handle, displayName, bio }]
+  if (!apiKey || !accountInfos.length) return [];
+  const lines = accountInfos.map(a =>
+    `- handle: ${a.handle}, 표시이름: "${a.displayName || ''}", 소개글: "${(a.bio || '').slice(0, 100)}"`
+  ).join('\n');
+  const prompt = `다음 인스타그램 계정들이 뷰티/메이크업/향수/스킨케어 브랜드 공식 계정인지 판단해주세요.
+개인 인플루언서, 아이돌, 연예인, 일반인 계정은 isBeauty: false로 분류해주세요.
+브랜드라면 한국에서 통용되는 한국어 브랜드명(짧고 간결하게)도 알려주세요.
+
+계정 목록:
+${lines}
+
+반드시 JSON 배열만 출력해주세요 (다른 설명 없이):
+[
+  {"handle": "계정명", "isBeauty": true/false, "koreanName": "한국어브랜드명 또는 null"}
+]`;
+  try {
+    const raw = await callGemini(apiKey, prompt);
+    // JSON 배열 추출
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    return JSON.parse(match[0]);
+  } catch (e) {
+    console.warn('  Gemini 분류 실패:', e.message);
+    return [];
+  }
+}
+
 async function autoDiscoverBrands(page, captions, config) {
   await loadBrandCache();
+  await loadBrandsLearned();
+
+  // 캡션에서 @멘션 추출, 빈도 집계
   const counts = new Map();
   for (const cap of captions) {
     for (const [, h] of (cap.matchAll(/@([\w.]+)/g) || [])) {
       const handle = h.toLowerCase();
-      if (!BUILT_IN_BRANDS.has(handle) && !brandCache.has(handle))
-        counts.set(handle, (counts.get(handle) || 0) + 1);
+      // 이미 알고 있는 계정은 건너뜀
+      if (BUILT_IN_BRANDS.has(handle)) continue;
+      if (brandCache.has(handle)) continue;
+      if (brandsLearned.has(handle)) continue;
+      counts.set(handle, (counts.get(handle) || 0) + 1);
     }
   }
+
   const toLookup = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 25)
+    .slice(0, 30)   // 최대 30개 계정 조회
     .map(([h]) => h);
-  if (!toLookup.length) return;
-  console.log(`\n브랜드명 자동 수집: ${toLookup.length}개 계정...`);
+
+  if (!toLookup.length) {
+    console.log('\n  새로 조회할 @멘션 계정 없음.');
+    return;
+  }
+  console.log(`\n🔍 브랜드 자동 학습: @멘션 ${toLookup.length}개 계정 프로필 조회...`);
+
+  // 1단계: 프로필 방문으로 displayName + bio 수집
+  const accountInfos = [];
   for (const handle of toLookup) {
-    const { displayName } = await visitProfile(page, handle);
-    if (displayName) {
-      brandCache.set(handle, displayName);
-      console.log(`  @${handle} → ${displayName}`);
+    const { displayName, bio } = await visitProfile(page, handle);
+    accountInfos.push({ handle, displayName: displayName || handle, bio: bio || '' });
+    console.log(`  @${handle} → "${displayName || '?'}"`);
+  }
+
+  // 2단계: Gemini로 뷰티 브랜드 일괄 분류
+  const geminiKey = config.geminiKey || '';
+  let classifications = [];
+  if (geminiKey) {
+    console.log(`\n  🤖 Gemini로 ${accountInfos.length}개 계정 뷰티 브랜드 분류 중...`);
+    classifications = await classifyBrandsWithGemini(geminiKey, accountInfos);
+  } else {
+    console.log('  ⚠️  Gemini 키 없음 — displayName을 브랜드명으로 저장합니다.');
+    classifications = accountInfos.map(a => ({ handle: a.handle, isBeauty: true, koreanName: a.displayName }));
+  }
+
+  // 3단계: 결과 저장
+  let beautyCount = 0;
+  for (const cls of classifications) {
+    const handle = cls.handle?.toLowerCase();
+    if (!handle) continue;
+    const isBeauty = Boolean(cls.isBeauty);
+    const koreanName = isBeauty ? (cls.koreanName || null) : null;
+    const learnedAt = new Date().toISOString().slice(0, 10);
+    brandsLearned.set(handle, { koreanName, isBeauty, learnedAt });
+    if (isBeauty && koreanName) {
+      brandCache.set(handle, koreanName);  // 기존 brands_cache에도 추가 (프론트 호환)
+      beautyCount++;
+      console.log(`  ✅ 뷰티 브랜드: @${handle} → "${koreanName}"`);
+    } else {
+      console.log(`  ⬜ 비브랜드: @${handle}`);
     }
   }
+
+  // 아직 분류 안 된 것들 (Gemini 응답 누락) — displayName 그대로 저장
+  const classifiedHandles = new Set(classifications.map(c => c.handle?.toLowerCase()).filter(Boolean));
+  for (const ai of accountInfos) {
+    if (!classifiedHandles.has(ai.handle) && !brandsLearned.has(ai.handle)) {
+      brandsLearned.set(ai.handle, { koreanName: ai.displayName, isBeauty: true, learnedAt: new Date().toISOString().slice(0, 10) });
+      brandCache.set(ai.handle, ai.displayName);
+    }
+  }
+
   await saveBrandCache(config);
+  await saveBrandsLearned(config);
+  console.log(`\n  💾 자동 학습 완료: 뷰티 브랜드 ${beautyCount}개 신규 등록`);
 }
 
 // ── 포스트 상세 스크랩 ─────────────────────────────────────
