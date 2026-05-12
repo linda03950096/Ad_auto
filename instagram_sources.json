@@ -25,6 +25,7 @@
     "뷰티 정보"
   ],
   "twitterAccounts": [],
+  "ownTwitterAccounts": ["adddid21"],
   "publishToGit": false,
   "minLikes": 300,
   "bigAccountMinFollowers": 30000,

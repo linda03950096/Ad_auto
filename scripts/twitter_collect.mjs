@@ -161,9 +161,15 @@ function isArticleLinkPost(caption) {
 // 반드시: 광고 아님 + 미디어 계정 아님 + 링크 유도 아님
 //         + 본문에 구체적 제품 정보(브랜드명 또는 제품 종류) 있음
 // 추가로: 아이돌/연예인 맥락 OR 인플루언서/MUA 맥락 OR bullet 제품 나열 형식
-function shouldKeep(caption, sourceType, username) {
+function shouldKeep(caption, sourceType, username, ownAccounts = []) {
   if (!caption || caption.length < 10) return false;
   if (isAdPost(caption)) return false;
+
+  // 내 계정 게시물 제외 (자기 자신이 운영하는 계정)
+  if (username && ownAccounts.some(a => a.toLowerCase() === username.toLowerCase())) {
+    console.log(`  ⛔ 내 계정 제외 @${username}`);
+    return false;
+  }
 
   // 미디어/매거진 계정 제외
   if (isMediaAccount(username)) {
@@ -203,7 +209,7 @@ function parseLikes(text) {
 }
 
 // ── 타임라인 수집 ─────────────────────────────────────────────
-async function collectFromSource(page, source, scrolls) {
+async function collectFromSource(page, source, scrolls, ownAccounts = []) {
   console.log(`📥 수집: ${source.label} → ${source.url}`);
   try {
     await page.goto(source.url, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -255,7 +261,7 @@ async function collectFromSource(page, source, scrolls) {
       if (found.has(id)) continue;
 
       // ── 필터 적용 ──
-      if (!shouldKeep(t.caption, source.sourceType, t.username)) {
+      if (!shouldKeep(t.caption, source.sourceType, t.username, ownAccounts)) {
         skipCount++;
         continue;
       }
@@ -292,9 +298,10 @@ async function main() {
   const config = await readJson(configPath, null);
   if (!config) throw new Error(`설정 파일 없음: ${configPath}`);
 
-  const hashtags = config.twitterHashtags || [];
-  const keywords = config.twitterKeywords || [];
-  const accounts = config.twitterAccounts || [];
+  const hashtags    = config.twitterHashtags || [];
+  const keywords    = config.twitterKeywords || [];
+  const accounts    = config.twitterAccounts || [];
+  const ownAccounts = config.ownTwitterAccounts || [];  // 내 계정 제외 목록
 
   if (!hashtags.length && !keywords.length && !accounts.length) {
     console.log('⚠️  twitter 설정이 없습니다. instagram_sources.json 에 twitterHashtags / twitterKeywords / twitterAccounts 를 추가해주세요.');
@@ -384,7 +391,7 @@ async function main() {
         label:      `#${tag}`,
         url:        `https://x.com/search?q=${encoded}&f=live`,
         sourceType: "twitter-hashtag",
-      }, SCROLLS);
+      }, SCROLLS, ownAccounts);
       for (const item of items) {
         if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
       }
@@ -398,7 +405,7 @@ async function main() {
         label:      `🔍 ${kw}`,
         url:        `https://x.com/search?q=${encoded}&f=live`,
         sourceType: "twitter-keyword",
-      }, SCROLLS);
+      }, SCROLLS, ownAccounts);
       for (const item of items) {
         if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
       }
@@ -411,7 +418,7 @@ async function main() {
         label:      `@${account}`,
         url:        `https://x.com/${account}`,
         sourceType: "twitter-account",
-      }, SCROLLS);
+      }, SCROLLS, ownAccounts);
       for (const item of items) {
         if (!existing.has(item.id)) { existing.set(item.id, item); added++; }
       }
