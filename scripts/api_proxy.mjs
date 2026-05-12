@@ -3,11 +3,12 @@
  * 실행: npm run proxy
  * 포트: http://0.0.0.0:3001 (같은 Wi-Fi의 다른 기기에서도 접속 가능)
  */
-import http  from 'node:http';
-import https from 'node:https';
-import fs    from 'node:fs/promises';
-import path  from 'node:path';
-import os    from 'node:os';
+import http         from 'node:http';
+import https        from 'node:https';
+import fs           from 'node:fs/promises';
+import path         from 'node:path';
+import os           from 'node:os';
+import { spawn }    from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,57 @@ async function getGeminiKey() {
     if (m) return m[1].trim();
   } catch {}
   return null;
+}
+
+// ── 크롤링 상태 ──────────────────────────────────────────────────
+let _crawlRunning  = false;
+let _crawlLogs     = [];
+let _crawlDoneAt   = null;
+
+function _crawlLog(line) {
+  _crawlLogs.push(line);
+  if (_crawlLogs.length > 200) _crawlLogs.shift();
+}
+
+function startCrawl(enrichOnly = false, platform = 'instagram') {
+  if (_crawlRunning) return false;
+  _crawlRunning = true;
+  _crawlDoneAt  = null;
+
+  let script, label;
+  if (platform === 'twitter') {
+    script = 'scripts/twitter_collect.mjs';
+    label  = '🐦 X(트위터) 크롤링 시작...';
+  } else if (enrichOnly) {
+    script = 'scripts/instagram_collect.mjs';
+    label  = '🔍 미분석 항목 일괄 분석 시작...';
+  } else {
+    script = 'scripts/instagram_collect.mjs';
+    label  = '🕷 인스타그램 크롤링 시작...';
+  }
+
+  const args = ['node', script];
+  if (enrichOnly && platform !== 'twitter') args.push('--enrich-only');
+  _crawlLogs = [label];
+
+  const proc = spawn(args[0], args.slice(1), {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  proc.stdout.on('data', d =>
+    d.toString().split('\n').filter(Boolean).forEach(l => { _crawlLog(l); console.log('[crawl]', l); })
+  );
+  proc.stderr.on('data', d =>
+    d.toString().split('\n').filter(Boolean).forEach(l => { _crawlLog('⚠ ' + l); })
+  );
+  proc.on('close', code => {
+    _crawlRunning = false;
+    _crawlDoneAt  = new Date().toISOString();
+    _crawlLog(code === 0 ? '✅ 크롤링 완료!' : `❌ 크롤링 종료 (exit ${code})`);
+    console.log(`[crawl] 완료 exit=${code}`);
+  });
+  return true;
 }
 
 // ── 올리브영 Playwright 스크래퍼 ────────────────────────────────
@@ -189,16 +241,25 @@ async function _scrapeOliveYoung(query) {
         }
       }
 
-      if (!priceDigits) return null;
-
       const linkEl = item.querySelector('a[href*="goodsNo"]') || item.querySelector('a');
+
+      // 디버그: 가격 영역 HTML 반환 (Node에서 로깅)
+      const _itemHtml = item.innerHTML.slice(0, 1000);
+
+      if (!priceDigits) return { _debug: true, _itemHtml };
 
       return {
         productName : (nameEl?.textContent || '').trim(),
         price       : priceDigits + '원',
         url         : linkEl?.href || '',
+        _itemHtml,
       };
     });
+
+    // Node 콘솔에 아이템 HTML 출력
+    if (result?._itemHtml) {
+      console.log(`   [OY item HTML]\n${result._itemHtml}\n`);
+    }
 
     if (!result) {
       // 페이지 소스 일부 로그 (셀렉터 디버깅용)
@@ -215,6 +276,66 @@ async function _scrapeOliveYoung(query) {
   }
 }
 
+// ── 럭셔리 브랜드 공식 한국 사이트 매핑 ─────────────────────────
+// 올리브영 미입점 시 이 URL을 프론트로 전달해 자동으로 탭을 열어줌
+const LUXURY_BRAND_SEARCH = {
+  '디올':       q => `https://www.dior.com/ko_kr/search#searchQuery=${encodeURIComponent(q)}&domain=beauty`,
+  'dior':       q => `https://www.dior.com/ko_kr/search#searchQuery=${encodeURIComponent(q)}&domain=beauty`,
+  '샤넬':       q => `https://www.chanel.com/ko_kr/fragrance-beauty/search/?q=${encodeURIComponent(q)}`,
+  'chanel':     q => `https://www.chanel.com/ko_kr/fragrance-beauty/search/?q=${encodeURIComponent(q)}`,
+  '이브생로랑': q => `https://www.yslbeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  '입생로랑':   q => `https://www.yslbeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  'ysl':        q => `https://www.yslbeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  '나스':       q => `https://www.narscosmetics.co.kr/kr/search?q=${encodeURIComponent(q)}`,
+  'nars':       q => `https://www.narscosmetics.co.kr/kr/search?q=${encodeURIComponent(q)}`,
+  '맥':         q => `https://www.maccosmetics.co.kr/search?q=${encodeURIComponent(q.replace(/^맥\s*/,''))}&type=product`,
+  'mac ':       q => `https://www.maccosmetics.co.kr/search?q=${encodeURIComponent(q.replace(/^mac\s*/i,''))}&type=product`,
+  '랑콤':       q => `https://www.lancome.co.kr/search?q=${encodeURIComponent(q)}`,
+  'lancome':    q => `https://www.lancome.co.kr/search?q=${encodeURIComponent(q)}`,
+  '베네피트':   q => `https://www.benefitcosmetics.co.kr/search?q=${encodeURIComponent(q)}`,
+  'benefit':    q => `https://www.benefitcosmetics.co.kr/search?q=${encodeURIComponent(q)}`,
+  '클리니크':   q => `https://www.clinique.co.kr/search?q=${encodeURIComponent(q)}`,
+  'clinique':   q => `https://www.clinique.co.kr/search?q=${encodeURIComponent(q)}`,
+  '에스티로더': q => `https://www.esteelauder.co.kr/search?q=${encodeURIComponent(q)}`,
+  '바비브라운':  q => `https://www.bobbibrown.co.kr/search?q=${encodeURIComponent(q)}`,
+  'bobbi':      q => `https://www.bobbibrown.co.kr/search?q=${encodeURIComponent(q)}`,
+  '샬롯틸버리':  q => `https://www.charlottetilbury.com/ko/search?q=${encodeURIComponent(q)}`,
+  '아르마니':    q => `https://www.giorgioarmanibeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  'armani':     q => `https://www.giorgioarmanibeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  '지방시':     q => `https://www.givenchybeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+  '끌레드뽀':   q => `https://www.cledepeaubeaute.co.kr/search?q=${encodeURIComponent(q)}`,
+  '톰포드':     q => `https://www.tomfordbeauty.com/ko/search/?q=${encodeURIComponent(q)}`,
+  '로라메르시에': q => `https://www.lauramercier.co.kr/search?q=${encodeURIComponent(q)}`,
+  '조르지오아르마니': q => `https://www.giorgioarmanibeauty.co.kr/search?q=${encodeURIComponent(q)}`,
+};
+const LUXURY_BRAND_LABELS = {
+  '디올':'디올 뷰티 코리아', 'dior':'디올 뷰티 코리아',
+  '샤넬':'샤넬 뷰티 코리아', 'chanel':'샤넬 뷰티 코리아',
+  '이브생로랑':'YSL 뷰티', '입생로랑':'YSL 뷰티', 'ysl':'YSL 뷰티',
+  '나스':'나스 코리아', 'nars':'나스 코리아',
+  '맥':'맥 코스메틱스 코리아', 'mac ':'맥 코스메틱스 코리아',
+  '랑콤':'랑콤 코리아', 'lancome':'랑콤 코리아',
+  '베네피트':'베네피트 코리아', 'benefit':'베네피트 코리아',
+  '클리니크':'클리니크 코리아', 'clinique':'클리니크 코리아',
+  '에스티로더':'에스티로더 코리아', '바비브라운':'바비브라운 코리아', 'bobbi':'바비브라운 코리아',
+  '샬롯틸버리':'샬롯틸버리', '아르마니':'아르마니 뷰티', 'armani':'아르마니 뷰티',
+  '지방시':'지방시 뷰티', '끌레드뽀':'끌레드뽀보떼', '톰포드':'톰포드 뷰티',
+  '로라메르시에':'로라메르시에 코리아', '조르지오아르마니':'아르마니 뷰티',
+};
+
+function detectLuxuryBrand(query) {
+  const lo = query.toLowerCase();
+  for (const key of Object.keys(LUXURY_BRAND_SEARCH)) {
+    if (lo.includes(key.toLowerCase())) {
+      return {
+        name:      LUXURY_BRAND_LABELS[key] || key,
+        searchUrl: LUXURY_BRAND_SEARCH[key](query),
+      };
+    }
+  }
+  return null;
+}
+
 // ── HTTP 서버 ────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -228,6 +349,50 @@ const server = http.createServer(async (req, res) => {
     const key = await getGeminiKey();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, keyLoaded: Boolean(key) }));
+    return;
+  }
+
+  // ── 크롤링 시작 POST ──────────────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/crawl') {
+    const started = startCrawl(false);
+    res.writeHead(started ? 200 : 409, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(started
+      ? { ok: true,  message: '크롤링 시작됨' }
+      : { ok: false, message: '이미 크롤링 중입니다' }
+    ));
+    return;
+  }
+
+  // ── 미분석 항목 일괄 분석 POST ────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/enrich') {
+    const started = startCrawl(true, 'instagram');
+    res.writeHead(started ? 200 : 409, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(started
+      ? { ok: true,  message: '일괄 분석 시작됨' }
+      : { ok: false, message: '이미 실행 중입니다' }
+    ));
+    return;
+  }
+
+  // ── 트위터 크롤링 POST ────────────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/crawl/twitter') {
+    const started = startCrawl(false, 'twitter');
+    res.writeHead(started ? 200 : 409, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(started
+      ? { ok: true,  message: 'X(트위터) 크롤링 시작됨' }
+      : { ok: false, message: '이미 실행 중입니다' }
+    ));
+    return;
+  }
+
+  // ── 크롤링 상태 GET ───────────────────────────────────────────
+  if (req.method === 'GET' && req.url === '/api/crawl/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      running : _crawlRunning,
+      doneAt  : _crawlDoneAt,
+      logs    : _crawlLogs.slice(-50),
+    }));
     return;
   }
 
@@ -289,12 +454,21 @@ const server = http.createServer(async (req, res) => {
 
         if (result) {
           console.log(`   → ${result.price}  (${result.productName})`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ...result, source: 'oliveyoung' }));
         } else {
-          console.log(`   → 결과 없음`);
+          // 올리브영 미입점 → 럭셔리 브랜드 공식사이트 안내
+          const lux = detectLuxuryBrand(query.trim());
+          if (lux) {
+            console.log(`   → 올리브영 없음 — 럭셔리 브랜드 감지 (${lux.name})`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ price: null, source: 'luxury', brandName: lux.name, brandSearchUrl: lux.searchUrl }));
+          } else {
+            console.log(`   → 결과 없음`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ price: null, source: 'not_found' }));
+          }
         }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result ?? { price: null }));
       } catch (e) {
         console.error(`   ❌ 올리브영 검색 오류:`, e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
