@@ -1408,6 +1408,51 @@ const INSTA_CAT_KW = {
   '노즈':'기타','애교살':'기타','프라이머':'베이스/프라이머',
 };
 
+// ── 아이돌 그룹+멤버 감지 ────────────────────────────────────────
+const IDOL_MEMBERS = [
+  // 아이브
+  { group:'아이브', members:['장원영','안유진','리즈','가을','레이','이서','원영','유진'] },
+  // 에스파
+  { group:'에스파', members:['카리나','윈터','지젤','닝닝'] },
+  // 뉴진스
+  { group:'뉴진스', members:['민지','해린','혜인','다니엘','하니'] },
+  // 르세라핌
+  { group:'르세라핌', members:['김채원','사쿠라','허윤진','카즈하','홍은채','채원','은채'] },
+  // 블랙핑크
+  { group:'블랙핑크', members:['제니','지수','로제','리사'] },
+  // 트와이스
+  { group:'트와이스', members:['나연','정연','모모','사나','지효','미나','다현','채영','쯔위'] },
+  // 있지
+  { group:'있지', members:['예지','리아','류진','채령','유나'] },
+  // 엔믹스
+  { group:'엔믹스', members:['릴리','해원','설윤','배이','지우','규진'] },
+  // 케플러
+  { group:'케플러', members:['샤오팅','유연정','김채현','김다연','마샤','히카루','후이닝','이채연','서영은'] },
+  // aespa 영문
+  { group:'aespa', members:['karina','winter','giselle','ningning'] },
+  // ive 영문
+  { group:'ive', members:['wonyoung','yujin','liz','gaeul','rei','leeseo'] },
+  // newjeans 영문
+  { group:'newjeans', members:['minji','hanni','danielle','haerin','hyein'] },
+];
+
+function detectIdolFromCaption(text) {
+  if (!text) return null;
+  const lo = text.toLowerCase().replace(/\s+/g, '');
+  for (const { group, members } of IDOL_MEMBERS) {
+    const glo = group.toLowerCase().replace(/\s+/g, '');
+    const hasGroup = lo.includes(glo);
+    for (const member of members) {
+      const mlo = member.toLowerCase().replace(/\s+/g, '');
+      if (lo.includes(mlo)) {
+        // 그룹명도 있으면 "그룹 멤버", 없으면 멤버명만
+        return hasGroup ? `${group} ${member}` : member;
+      }
+    }
+  }
+  return null;
+}
+
 const INSTA_CAT_NAME = {
   '아이섀도우':'아이섀도우','블러셔':'블러셔','하이라이터':'하이라이터',
   '립':'틴트','아이라이너':'아이라이너','마스카라':'마스카라',
@@ -2216,7 +2261,7 @@ function renderInstaCard(item, i, isTodayPick = false) {
 
   const productRows = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
 
-  const postText = buildInstaPost(products, authorId, []);
+  const postText = buildInstaPost(products, authorId, [], rawCaption);
 
   const uploadBtnHtml = isUploaded
     ? `<button class="btn-upload-undo" id="upload-btn-${i}" onclick="markUploaded(${i}, false)">↩ 업로드 전으로 되돌리기</button>`
@@ -2626,7 +2671,7 @@ async function enrichTodayPicksWithGemini(geminiKey) {
       if (rowsEl) rowsEl.innerHTML = products.map((p, pi) => productRowHTML(i, pi, p)).join('');
 
       const ta = $id(`insta-post-${i}`);
-      if (ta) ta.value = buildInstaPost(products, username, []);
+      if (ta) ta.value = buildInstaPost(products, username, [], _instaData[i].rawCaption);
 
       // 자동 저장 (다음 로드 시 복원)
       const itemId = _instaData[i].itemId;
@@ -2658,10 +2703,13 @@ async function enrichTodayPicksWithGemini(geminiKey) {
 const INSTA_CATEGORY_ORDER = ['블러셔', '아이메이크업', '베이스', '하이라이터', '컨투어/쉐딩', '세팅파우더/픽서', '립', '기타'];
 
 // 인스타 게시물 포맷 빌드
-function buildInstaPost(products, authorId, extraHashtags) {
-  const header = (authorId && authorId !== '크리에이터')
-    ? `✺ @${authorId}님 메이크업 손민수`
-    : '✺ Instagram 메이크업 손민수';
+function buildInstaPost(products, authorId, extraHashtags, rawCaption) {
+  const idol = detectIdolFromCaption(rawCaption || '');
+  const header = idol
+    ? `✺ ${idol} 메이크업 손민수`
+    : (authorId && authorId !== '크리에이터')
+      ? `✺ @${authorId}님 메이크업 손민수`
+      : '✺ Instagram 메이크업 손민수';
 
   // 중복 제거
   const seen = new Set();
@@ -2716,7 +2764,7 @@ function reparseCaption(cardIdx) {
   const rowsEl = document.getElementById(`insta-products-${cardIdx}`);
   if (rowsEl) rowsEl.innerHTML = products.map((p, pi) => productRowHTML(cardIdx, pi, p)).join('');
   const ta = document.getElementById(`insta-post-${cardIdx}`);
-  if (ta) ta.value = buildInstaPost(products, stored.username, []);
+  if (ta) ta.value = buildInstaPost(products, stored.username, [], stored.rawCaption);
 
   // 서버+localStorage 캐시 갱신
   if (stored.itemId) {
@@ -2741,7 +2789,7 @@ function updateInstaPost(cardIdx) {
     return { category, brand: '', name, shade, price: price || null, link: link || null };
   }).filter(p => p.name);
 
-  $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, []);
+  $id(`insta-post-${cardIdx}`).value = buildInstaPost(products, stored.username, [], stored.rawCaption);
 
   // 서버 + localStorage에 자동 저장
   if (stored.itemId) {
