@@ -1746,6 +1746,47 @@ function parseInstagramCaption(rawCaption) {
 // ── 크롤링 UI ────────────────────────────────────────────────────
 let _crawlPollTimer = null;
 
+// ── 링크 없는 제품 전체 자동 채우기 ──────────────────────────────
+async function autoFillAllLinks() {
+  const rows = [...document.querySelectorAll('.product-edit-row')];
+  const targets = rows.filter(row => {
+    const name  = row.querySelector('[data-field="name"]')?.value.trim();
+    const link  = row.querySelector('[data-field="link"]')?.value.trim();
+    return name && !link;
+  });
+  if (!targets.length) return;
+
+  console.log(`🔗 링크 자동 채우기: ${targets.length}개 제품`);
+
+  for (const row of targets) {
+    const nameInput  = row.querySelector('[data-field="name"]');
+    const priceInput = row.querySelector('[data-field="price"]');
+    const linkInput  = row.querySelector('[data-field="link"]');
+    const query = nameInput?.value.trim();
+    if (!query) continue;
+
+    try {
+      const result = await _fetchOliveYoungPrice(query);
+      if (result?.url && linkInput) {
+        linkInput.value = result.url;
+        linkInput.dispatchEvent(new Event('input'));
+      }
+      if (result?.price && priceInput && !priceInput.value.trim()) {
+        priceInput.value = result.price;
+        priceInput.dispatchEvent(new Event('input'));
+      }
+      if (result?.source === 'luxury' && result.brandSearchUrl && linkInput && !linkInput.value.trim()) {
+        linkInput.value = result.brandSearchUrl;
+        linkInput.dispatchEvent(new Event('input'));
+      }
+    } catch {}
+
+    // 올리브영 봇 감지 방지: 요청 간 1.5초 대기
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  console.log('🔗 링크 자동 채우기 완료');
+}
+
 async function startCrawlFromUI(type) {
   const btnId = type === 'twitter' ? 'btn-crawl-twitter'
               : type === 'enrich'  ? 'btn-enrich'
@@ -1925,6 +1966,12 @@ async function loadInstaQueue() {
 
     _currentSubTab = 'pending';
     applySubTabFilter();
+
+    // 프록시가 켜져 있으면 링크 없는 제품 자동 채우기
+    try {
+      const h = await fetch(`${_serverUrl}/health`, { signal: AbortSignal.timeout(1500) });
+      if (h.ok) setTimeout(() => autoFillAllLinks(), 800);
+    } catch {}
 
   } catch {
     el.innerHTML = '<div class="status err">❌ instagram_queue.json 로드 실패. 수집기를 먼저 실행해주세요.</div>';
