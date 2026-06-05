@@ -1406,6 +1406,18 @@ const INSTA_CAT_KW = {
   '세팅파우더':'세팅파우더/픽서','파우더':'세팅파우더/픽서','픽서':'세팅파우더/픽서',
   '컨투어':'컨투어/쉐딩','쉐딩':'컨투어/쉐딩','쉐이딩':'컨투어/쉐딩',
   '노즈':'기타','애교살':'기타','프라이머':'베이스/프라이머',
+  // 영어 카테고리
+  'blush':'블러셔','cheek':'블러셔',
+  'lip':'립','lips':'립','lipstick':'립','tint':'립','gloss':'립',
+  'eye':'아이섀도우','eyeshadow':'아이섀도우','shadow':'아이섀도우',
+  'liner':'아이라이너','eyeliner':'아이라이너',
+  'mascara':'마스카라',
+  'brow':'아이브로우','eyebrow':'아이브로우',
+  'highlight':'하이라이터','highlighter':'하이라이터',
+  'foundation':'파운데이션','cushion':'쿠션','concealer':'컨실러',
+  'skin':'베이스/프라이머','base':'베이스/프라이머','primer':'베이스/프라이머',
+  'contour':'컨투어/쉐딩','shading':'컨투어/쉐딩',
+  'powder':'세팅파우더/픽서','setting':'세팅파우더/픽서',
 };
 
 // ── 아이돌 그룹+멤버 감지 ────────────────────────────────────────
@@ -1554,6 +1566,17 @@ function _splitProductText(productText, catKws) {
   return { category, name, shade };
 }
 
+// 제품명 텍스트에서 카테고리 추측
+function _guessCategory(text) {
+  if (!text) return null;
+  const lo = text.toLowerCase();
+  const catKws = Object.keys(INSTA_CAT_KW).sort((a, b) => b.length - a.length);
+  for (const kw of catKws) {
+    if (lo.includes(kw)) return INSTA_CAT_KW[kw];
+  }
+  return null;
+}
+
 function parseInstagramCaption(rawCaption) {
   const caption = cleanInstagramCaption(rawCaption);
   const lines   = caption.split(/\n/).map(l => stripEmoji(l)).filter(Boolean);
@@ -1567,8 +1590,32 @@ function parseInstagramCaption(rawCaption) {
   // 불릿 문자 제거 정규식
   const bulletRe = /^[■•\-*▪►▸·◆▶▫▫️]+\s*/;
 
+  let contextCategory = null; // 이전 줄에서 설정된 카테고리 ("blush :" 같은 카테고리 전용 줄)
+
   for (const line of lines) {
     const cleanLine = line.replace(bulletRe, '').trim();
+
+    // ── @account '제품명' 호수 형식 처리 ──────────────────────────
+    // 예: @vidivici.official '글로우 온 리퀴드 블러시' P02멜로우
+    const quotedProduct = cleanLine.match(/^@([\w.]+)\s+[''"'""](.+?)[''"'"']\s*(.*)?$/);
+    if (quotedProduct) {
+      const handle   = quotedProduct[1].toLowerCase();
+      const brand    = INSTA_ACCOUNT_BRANDS[handle] || quotedProduct[1];
+      const prodName = quotedProduct[2].trim();
+      const shadeRaw = (quotedProduct[3] || '').trim();
+      const category = contextCategory || _guessCategory(prodName) || '기타';
+
+      // 호수가 '+' 로 여러 개일 수 있음
+      const shades = shadeRaw.includes('+')
+        ? shadeRaw.split(/\s*\+\s*/).map(s => s.trim()).filter(Boolean)
+        : shadeRaw ? [shadeRaw] : [null];
+
+      for (const shade of shades)
+        results.push({ category, brand, name: prodName, shade: shade || null, price: null, link: null });
+
+      contextCategory = null;
+      continue;
+    }
 
     // ── @account 로 시작하는 줄 → 컨텍스트 브랜드 설정 후 스킵 ──
     if (/^@[\w.]+/.test(cleanLine)) {
@@ -1604,6 +1651,15 @@ function parseInstagramCaption(rawCaption) {
     }
     if (p0bMatched) continue;
 
+    // ── 카테고리 전용 줄 감지 ("blush :", "Lip:", "눈썹 :" 등) ──
+    // 카테고리 키워드 + 선택적 공백 + 콜론 만으로 구성된 줄
+    const catOnlyMatch = cleanLine.match(/^([a-zA-Z가-힣/]+)\s*:?\s*$/);
+    if (catOnlyMatch) {
+      const kw = catOnlyMatch[1].toLowerCase().trim();
+      const cat = INSTA_CAT_KW[kw];
+      if (cat) { contextCategory = cat; continue; }
+    }
+
     // ── 기존 패턴: 카테고리 키워드로 시작하는 줄 ───────────────
     let category = null, rest = cleanLine;
     for (const kw of catKws) {
@@ -1613,7 +1669,7 @@ function parseInstagramCaption(rawCaption) {
         break;
       }
     }
-    if (!category || !rest) continue;
+    if (!category || !rest) { contextCategory = null; continue; }
 
     const productName = INSTA_CAT_NAME[category] || category;
 
