@@ -2,6 +2,8 @@
   "scripts": {
     "collect:instagram": "node scripts/instagram_collect.mjs",
     "collect:instagram:publish": "node scripts/instagram_collect.mjs --publish",
+    "collect:twitter": "node scripts/twitter_collect.mjs",
+    "twitter:login": "node scripts/twitter_login.mjs",
     "proxy": "node scripts/api_proxy.mjs"
   },
   "dependencies": {

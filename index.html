@@ -2069,10 +2069,11 @@ async function _fetchOliveYoungPrice(query) {
 }
 
 async function searchOliveYoungPrice(btn, cardIdx) {
-  const row       = btn.closest('.product-edit-row');
-  const nameInput = row.querySelector('[data-field="name"]');
-  const priceInput= row.querySelector('[data-field="price"]');
-  const query     = nameInput?.value.trim() || '';  // 호수 제외, 브랜드+제품명만
+  const row        = btn.closest('.product-edit-row');
+  const nameInput  = row.querySelector('[data-field="name"]');
+  const priceInput = row.querySelector('[data-field="price"]');
+  const linkInput  = row.querySelector('[data-field="link"]');
+  const query      = nameInput?.value.trim() || '';  // 호수 제외, 브랜드+제품명만
 
   if (!query) {
     _showLookupToast('제품명을 먼저 입력하세요.', 'info');
@@ -2091,9 +2092,22 @@ async function searchOliveYoungPrice(btn, cardIdx) {
       priceInput.style.transition  = 'border-color .3s';
       priceInput.style.borderColor = '#f59e0b';
       setTimeout(() => { priceInput.style.borderColor = ''; }, 3000);
+      // 올리브영 제품 URL 자동 삽입
+      if (result.url && linkInput && !linkInput.value.trim()) {
+        linkInput.value = result.url;
+        linkInput.dispatchEvent(new Event('input'));
+      }
       btn.innerHTML = '✅';
       const detail = result.productName ? ` (${result.productName})` : '';
       _showLookupToast(`🛒 ${result.price}${detail}`, 'ok');
+    } else if (result?.source === 'luxury' && result.brandSearchUrl) {
+      // 럭셔리 브랜드: 공식 사이트 검색 URL 삽입
+      if (linkInput && !linkInput.value.trim()) {
+        linkInput.value = result.brandSearchUrl;
+        linkInput.dispatchEvent(new Event('input'));
+      }
+      btn.innerHTML = '🏷';
+      _showLookupToast(`${result.brandName || '럭셔리 브랜드'} 공식사이트 링크 삽입됨`, 'ok');
     } else {
       priceInput.value = '가격 확인 필요';
       priceInput.dispatchEvent(new Event('input'));
@@ -2137,12 +2151,24 @@ async function searchAllOliveYoungPrices(cardIdx) {
 
     if (oyBtn) { oyBtn.innerHTML = '⏳'; oyBtn.disabled = true; }
 
+    const linkInput = row.querySelector('[data-field="link"]');
     try {
       const result = await _fetchOliveYoungPrice(query);
       if (result?.price) {
         priceInput.value = result.price;
         priceInput.dispatchEvent(new Event('input'));
+        if (result.url && linkInput && !linkInput.value.trim()) {
+          linkInput.value = result.url;
+          linkInput.dispatchEvent(new Event('input'));
+        }
         if (oyBtn) oyBtn.innerHTML = '✅';
+        found++;
+      } else if (result?.source === 'luxury' && result.brandSearchUrl) {
+        if (linkInput && !linkInput.value.trim()) {
+          linkInput.value = result.brandSearchUrl;
+          linkInput.dispatchEvent(new Event('input'));
+        }
+        if (oyBtn) oyBtn.innerHTML = '🏷';
         found++;
       } else {
         priceInput.value = '가격 확인 필요';
@@ -2489,10 +2515,14 @@ async function callGeminiForInstaCaption(caption, geminiKey) {
 ${caption.slice(0, 1500)}
 
 JSON 배열만 반환 (설명 없이):
-[{"category":"카테고리","brand":"브랜드(한국어)","shade":"컬러/제품명"}]
+[{"category":"카테고리","brand":"브랜드(한국어)","name":"제품라인명","shade":"호수/색상(없으면 null)"}]
 
-카테고리는 반드시 다음 중 하나만: 아이섀도우, 블러셔, 하이라이터, 립, 아이라이너, 마스카라, 아이브로우, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 컨투어/쉐딩, 베이스/프라이머, 기타
-브랜드명은 한국어로 (예: 롬앤, 클리오, 에뛰드, 어뮤즈)
+규칙:
+- category: 아이섀도우, 블러셔, 하이라이터, 립, 아이라이너, 마스카라, 아이브로우, 파운데이션, 쿠션, 컨실러, 세팅파우더/픽서, 컨투어/쉐딩, 베이스/프라이머, 기타 중 하나
+- brand: 한국어 브랜드명 (예: 롬앤, 클리오, 에뛰드, 어뮤즈, 하트퍼센트)
+- name: 제품 라인/시리즈명만 (브랜드명 제외, 호수/색상 제외). 예: "글래스팅 컬러 글로스", "도트 온 무드 립 펜슬", "킬 커버 쿠션"
+- shade: 호수 번호 또는 색상명만 (없으면 null). 예: "01 로지핑크", "04 코코아 더스트", "03 피치 베이지"
+- name과 shade를 절대 합치지 말 것 — 반드시 분리할 것
 제품 정보가 없으면 [] 반환`;
 
   const reqBody = JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] });
@@ -2532,7 +2562,7 @@ JSON 배열만 반환 (설명 없이):
   return JSON.parse(m[0]).map(item => ({
     category: item.category || '기타',
     brand:    item.brand    || '',
-    name:     INSTA_CAT_NAME[item.category] || item.category || '제품',
+    name:     item.name     || INSTA_CAT_NAME[item.category] || item.category || '제품',
     shade:    item.shade    || null,
     price:    null,
     link:     null,
