@@ -1189,7 +1189,7 @@ function buildPost(products, creatorInfo, hashtags) {
   for (const p of products) {
     (byCategory[p.category] = byCategory[p.category] || []).push(p);
   }
-  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ ${creatorInfo} 메이크업 손민수\n`;
+  let out = `✺ ${creatorInfo} 메이크업 손민수\n`;
   for (const [cat, items] of Object.entries(byCategory)) {
     out += `\n♡ ${displayCategory(cat)}\n`;
     for (const p of items) {
@@ -2865,7 +2865,7 @@ function buildInstaPost(products, authorId, extraHashtags, rawCaption) {
     ...Object.keys(byCategory).filter(c => !INSTA_CATEGORY_ORDER.includes(c)),
   ];
 
-  let out = `링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n${header}\n`;
+  let out = `${header}\n`;
   for (const cat of orderedCats) {
     out += `\n♡ ${cat}\n`;
     for (const p of byCategory[cat]) {
