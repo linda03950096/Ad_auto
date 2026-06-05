@@ -2473,6 +2473,24 @@ function renderInstaCard(item, i, isTodayPick = false) {
     </div>
 
     <div class="insta-body">
+      ${item.image ? `
+      <div style="margin-bottom:1rem;display:flex;gap:.7rem;align-items:flex-start;flex-wrap:wrap">
+        <img src="${esc(item.image)}"
+             style="max-width:220px;max-height:220px;border-radius:10px;object-fit:cover;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)"
+             onclick="window.open('${esc(item.image)}','_blank')"
+             onerror="this.parentElement.style.display='none'"
+             title="클릭하면 새 탭에서 열려요">
+        <div style="display:flex;flex-direction:column;gap:.4rem;justify-content:flex-end">
+          <button onclick="window.open('${esc(item.image)}','_blank')"
+                  style="font-size:.76rem;padding:.3rem .7rem;border-radius:7px;border:1.5px solid #d8b4fe;background:#f5f0ff;color:#7c3aed;cursor:pointer;font-weight:700">
+            🖼 새 탭에서 열기
+          </button>
+          <a href="${esc(item.image)}" download
+             style="font-size:.76rem;padding:.3rem .7rem;border-radius:7px;border:1.5px solid #86efac;background:#f0fdf4;color:#166534;cursor:pointer;font-weight:700;text-decoration:none;text-align:center">
+            ⬇ 이미지 저장
+          </a>
+        </div>
+      </div>` : ''}
       <div class="product-edit-header">
         <span>카테고리</span><span>제품명</span><span>호수</span><span>가격</span><span>링크</span>
       </div>
