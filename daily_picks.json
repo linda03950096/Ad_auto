@@ -1,28 +1,12 @@
 {
-  "date": "2026-06-13",
-  "generatedAt": "2026-06-13T02:29:11.005039+00:00",
+  "date": "2026-06-14",
+  "generatedAt": "2026-06-14T02:40:30.663805+00:00",
   "timeWindow": "숏폼/롱폼 분리",
   "sections": {
     "shorts": {
       "label": "숏폼",
       "timeWindow": "최근 30일",
       "videos": [
-        {
-          "videoId": "va5Pa3DIFXo",
-          "title": "요즘 핫한 과즙가글 손민수 후기🍑🍇🍏",
-          "channelTitle": "한이서 HANLEESEO",
-          "thumbnail": "https://i.ytimg.com/vi/va5Pa3DIFXo/mqdefault.jpg",
-          "publishedAt": "2026-05-14T09:01:10Z",
-          "url": "https://www.youtube.com/watch?v=va5Pa3DIFXo",
-          "durationSeconds": 50,
-          "durationText": "0:50",
-          "viewCount": 58568,
-          "likeCount": 10,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 한이서 HANLEESEO 메이크업 손민수",
-          "transcriptFetched": false
-        },
         {
           "videoId": "3fO_ReKaMy0",
           "title": "노광고✔️ 매번 질문 받는 메이크업템 추천🫒",
@@ -32,8 +16,8 @@
           "url": "https://www.youtube.com/watch?v=3fO_ReKaMy0",
           "durationSeconds": 124,
           "durationText": "2:04",
-          "viewCount": 27812,
-          "likeCount": 773,
+          "viewCount": 27880,
+          "likeCount": 772,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 잉구EEN9 메이크업 손민수",
@@ -48,7 +32,7 @@
           "url": "https://www.youtube.com/watch?v=ccIzPO8OPjw",
           "durationSeconds": 26,
           "durationText": "0:26",
-          "viewCount": 27018,
+          "viewCount": 27063,
           "likeCount": 224,
           "products": [],
           "hashtags": [],
@@ -64,7 +48,7 @@
           "url": "https://www.youtube.com/watch?v=ItsOOl5uxVU",
           "durationSeconds": 43,
           "durationText": "0:43",
-          "viewCount": 19795,
+          "viewCount": 19847,
           "likeCount": 356,
           "products": [],
           "hashtags": [],
@@ -80,11 +64,27 @@
           "url": "https://www.youtube.com/watch?v=9gKOUofpXZA",
           "durationSeconds": 22,
           "durationText": "0:22",
-          "viewCount": 18803,
+          "viewCount": 18804,
           "likeCount": 323,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 여자템 메이크업 손민수",
+          "transcriptFetched": false
+        },
+        {
+          "videoId": "vraOoypl9gQ",
+          "title": "지갑 잃어버리는 친구 태그해줘 #소미 #아이오아이",
+          "channelTitle": "왓츠인유어백",
+          "thumbnail": "https://i.ytimg.com/vi/vraOoypl9gQ/mqdefault.jpg",
+          "publishedAt": "2026-05-17T12:01:30Z",
+          "url": "https://www.youtube.com/watch?v=vraOoypl9gQ",
+          "durationSeconds": 34,
+          "durationText": "0:34",
+          "viewCount": 18696,
+          "likeCount": 51,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 왓츠인유어백 메이크업 손민수",
           "transcriptFetched": false
         }
       ]
@@ -92,26 +92,27 @@
     "longs": {
       "label": "롱폼",
       "timeWindow": "최근 30일",
-      "videos": []
+      "videos": [
+        {
+          "videoId": "b_mhpEfzCek",
+          "title": "유튜버 공동개발템 진짜 좋을까? 직접 써봤는데..🤔 ( 민스코 퓌 쿠션ㅣ에뛰드 선우 마스카라ㅣ투슬래쉬포 이사배 파우더ㅣ릴바레 코코초 틴트 )",
+          "channelTitle": "오션 OCEAN",
+          "thumbnail": "https://i.ytimg.com/vi/b_mhpEfzCek/mqdefault.jpg",
+          "publishedAt": "2026-05-21T10:00:56Z",
+          "url": "https://www.youtube.com/watch?v=b_mhpEfzCek",
+          "durationSeconds": 1582,
+          "durationText": "26:22",
+          "viewCount": 12543,
+          "likeCount": 265,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 오션 OCEAN 메이크업 손민수",
+          "transcriptFetched": false
+        }
+      ]
     }
   },
   "videos": [
-    {
-      "videoId": "va5Pa3DIFXo",
-      "title": "요즘 핫한 과즙가글 손민수 후기🍑🍇🍏",
-      "channelTitle": "한이서 HANLEESEO",
-      "thumbnail": "https://i.ytimg.com/vi/va5Pa3DIFXo/mqdefault.jpg",
-      "publishedAt": "2026-05-14T09:01:10Z",
-      "url": "https://www.youtube.com/watch?v=va5Pa3DIFXo",
-      "durationSeconds": 50,
-      "durationText": "0:50",
-      "viewCount": 58568,
-      "likeCount": 10,
-      "products": [],
-      "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 한이서 HANLEESEO 메이크업 손민수",
-      "transcriptFetched": false
-    },
     {
       "videoId": "3fO_ReKaMy0",
       "title": "노광고✔️ 매번 질문 받는 메이크업템 추천🫒",
@@ -121,8 +122,8 @@
       "url": "https://www.youtube.com/watch?v=3fO_ReKaMy0",
       "durationSeconds": 124,
       "durationText": "2:04",
-      "viewCount": 27812,
-      "likeCount": 773,
+      "viewCount": 27880,
+      "likeCount": 772,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 잉구EEN9 메이크업 손민수",
@@ -137,7 +138,7 @@
       "url": "https://www.youtube.com/watch?v=ccIzPO8OPjw",
       "durationSeconds": 26,
       "durationText": "0:26",
-      "viewCount": 27018,
+      "viewCount": 27063,
       "likeCount": 224,
       "products": [],
       "hashtags": [],
@@ -153,7 +154,7 @@
       "url": "https://www.youtube.com/watch?v=ItsOOl5uxVU",
       "durationSeconds": 43,
       "durationText": "0:43",
-      "viewCount": 19795,
+      "viewCount": 19847,
       "likeCount": 356,
       "products": [],
       "hashtags": [],
@@ -169,11 +170,43 @@
       "url": "https://www.youtube.com/watch?v=9gKOUofpXZA",
       "durationSeconds": 22,
       "durationText": "0:22",
-      "viewCount": 18803,
+      "viewCount": 18804,
       "likeCount": 323,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 여자템 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "vraOoypl9gQ",
+      "title": "지갑 잃어버리는 친구 태그해줘 #소미 #아이오아이",
+      "channelTitle": "왓츠인유어백",
+      "thumbnail": "https://i.ytimg.com/vi/vraOoypl9gQ/mqdefault.jpg",
+      "publishedAt": "2026-05-17T12:01:30Z",
+      "url": "https://www.youtube.com/watch?v=vraOoypl9gQ",
+      "durationSeconds": 34,
+      "durationText": "0:34",
+      "viewCount": 18696,
+      "likeCount": 51,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 왓츠인유어백 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "b_mhpEfzCek",
+      "title": "유튜버 공동개발템 진짜 좋을까? 직접 써봤는데..🤔 ( 민스코 퓌 쿠션ㅣ에뛰드 선우 마스카라ㅣ투슬래쉬포 이사배 파우더ㅣ릴바레 코코초 틴트 )",
+      "channelTitle": "오션 OCEAN",
+      "thumbnail": "https://i.ytimg.com/vi/b_mhpEfzCek/mqdefault.jpg",
+      "publishedAt": "2026-05-21T10:00:56Z",
+      "url": "https://www.youtube.com/watch?v=b_mhpEfzCek",
+      "durationSeconds": 1582,
+      "durationText": "26:22",
+      "viewCount": 12543,
+      "likeCount": 265,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 오션 OCEAN 메이크업 손민수",
       "transcriptFetched": false
     }
   ]
