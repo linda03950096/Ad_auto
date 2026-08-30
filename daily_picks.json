@@ -1,6 +1,6 @@
 {
-  "date": "2026-08-29",
-  "generatedAt": "2026-08-29T04:46:38.359760+00:00",
+  "date": "2026-08-30",
+  "generatedAt": "2026-08-30T02:24:46.668032+00:00",
   "timeWindow": "숏폼/롱폼 분리",
   "sections": {
     "shorts": {
@@ -16,11 +16,27 @@
           "url": "https://www.youtube.com/watch?v=eYcCNiRodew",
           "durationSeconds": 63,
           "durationText": "1:03",
-          "viewCount": 282862,
-          "likeCount": 7743,
+          "viewCount": 285423,
+          "likeCount": 7762,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 뽀용뇽 l 남다른 뷰티꿀팁 메이크업 손민수",
+          "transcriptFetched": false
+        },
+        {
+          "videoId": "ZN8wZaOEmv0",
+          "title": "피부과에 1억 써보고 실제로 효과 최고라는 크림 정체",
+          "channelTitle": "핫한걸",
+          "thumbnail": "https://i.ytimg.com/vi/ZN8wZaOEmv0/mqdefault.jpg",
+          "publishedAt": "2026-08-10T10:45:12Z",
+          "url": "https://www.youtube.com/watch?v=ZN8wZaOEmv0",
+          "durationSeconds": 20,
+          "durationText": "0:20",
+          "viewCount": 65275,
+          "likeCount": 444,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 핫한걸 메이크업 손민수",
           "transcriptFetched": false
         },
         {
@@ -32,7 +48,7 @@
           "url": "https://www.youtube.com/watch?v=BsJVHDUdHZ0",
           "durationSeconds": 18,
           "durationText": "0:18",
-          "viewCount": 30413,
+          "viewCount": 30416,
           "likeCount": 59,
           "products": [],
           "hashtags": [],
@@ -48,7 +64,7 @@
           "url": "https://www.youtube.com/watch?v=19WL8dwLcII",
           "durationSeconds": 18,
           "durationText": "0:18",
-          "viewCount": 11980,
+          "viewCount": 11982,
           "likeCount": 63,
           "products": [],
           "hashtags": [],
@@ -64,27 +80,11 @@
           "url": "https://www.youtube.com/watch?v=fElM85n5Gaw",
           "durationSeconds": 25,
           "durationText": "0:25",
-          "viewCount": 1890,
+          "viewCount": 1892,
           "likeCount": 7,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 생활의 꿀떡 Tips for Life 메이크업 손민수",
-          "transcriptFetched": false
-        },
-        {
-          "videoId": "2FMguhZGtz4",
-          "title": "당장 손민수하라는 이시안의 청순 메이크업🌸",
-          "channelTitle": "넝쿨템",
-          "thumbnail": "https://i.ytimg.com/vi/2FMguhZGtz4/mqdefault.jpg",
-          "publishedAt": "2026-08-14T06:51:27Z",
-          "url": "https://www.youtube.com/watch?v=2FMguhZGtz4",
-          "durationSeconds": 24,
-          "durationText": "0:24",
-          "viewCount": 1602,
-          "likeCount": 2,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 넝쿨템 메이크업 손민수",
           "transcriptFetched": false
         }
       ]
@@ -92,7 +92,24 @@
     "longs": {
       "label": "롱폼",
       "timeWindow": "최근 30일",
-      "videos": []
+      "videos": [
+        {
+          "videoId": "lIvAI_va8LU",
+          "title": "[광고❌] 40대 메이크업, 결국 '이것'들만 남았습니다 (찐템 11가지 추천) I 메이크업 꿀팁",
+          "channelTitle": "오늘의 관리 예보",
+          "thumbnail": "https://i.ytimg.com/vi/lIvAI_va8LU/mqdefault.jpg",
+          "publishedAt": "2026-08-04T11:00:09Z",
+          "url": "https://www.youtube.com/watch?v=lIvAI_va8LU",
+          "durationSeconds": 319,
+          "durationText": "5:19",
+          "viewCount": 1862,
+          "likeCount": 57,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 오늘의 관리 예보 메이크업 손민수",
+          "transcriptFetched": false
+        }
+      ]
     }
   },
   "videos": [
@@ -105,11 +122,27 @@
       "url": "https://www.youtube.com/watch?v=eYcCNiRodew",
       "durationSeconds": 63,
       "durationText": "1:03",
-      "viewCount": 282862,
-      "likeCount": 7743,
+      "viewCount": 285423,
+      "likeCount": 7762,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 뽀용뇽 l 남다른 뷰티꿀팁 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "ZN8wZaOEmv0",
+      "title": "피부과에 1억 써보고 실제로 효과 최고라는 크림 정체",
+      "channelTitle": "핫한걸",
+      "thumbnail": "https://i.ytimg.com/vi/ZN8wZaOEmv0/mqdefault.jpg",
+      "publishedAt": "2026-08-10T10:45:12Z",
+      "url": "https://www.youtube.com/watch?v=ZN8wZaOEmv0",
+      "durationSeconds": 20,
+      "durationText": "0:20",
+      "viewCount": 65275,
+      "likeCount": 444,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 핫한걸 메이크업 손민수",
       "transcriptFetched": false
     },
     {
@@ -121,7 +154,7 @@
       "url": "https://www.youtube.com/watch?v=BsJVHDUdHZ0",
       "durationSeconds": 18,
       "durationText": "0:18",
-      "viewCount": 30413,
+      "viewCount": 30416,
       "likeCount": 59,
       "products": [],
       "hashtags": [],
@@ -137,7 +170,7 @@
       "url": "https://www.youtube.com/watch?v=19WL8dwLcII",
       "durationSeconds": 18,
       "durationText": "0:18",
-      "viewCount": 11980,
+      "viewCount": 11982,
       "likeCount": 63,
       "products": [],
       "hashtags": [],
@@ -153,7 +186,7 @@
       "url": "https://www.youtube.com/watch?v=fElM85n5Gaw",
       "durationSeconds": 25,
       "durationText": "0:25",
-      "viewCount": 1890,
+      "viewCount": 1892,
       "likeCount": 7,
       "products": [],
       "hashtags": [],
@@ -161,19 +194,19 @@
       "transcriptFetched": false
     },
     {
-      "videoId": "2FMguhZGtz4",
-      "title": "당장 손민수하라는 이시안의 청순 메이크업🌸",
-      "channelTitle": "넝쿨템",
-      "thumbnail": "https://i.ytimg.com/vi/2FMguhZGtz4/mqdefault.jpg",
-      "publishedAt": "2026-08-14T06:51:27Z",
-      "url": "https://www.youtube.com/watch?v=2FMguhZGtz4",
-      "durationSeconds": 24,
-      "durationText": "0:24",
-      "viewCount": 1602,
-      "likeCount": 2,
+      "videoId": "lIvAI_va8LU",
+      "title": "[광고❌] 40대 메이크업, 결국 '이것'들만 남았습니다 (찐템 11가지 추천) I 메이크업 꿀팁",
+      "channelTitle": "오늘의 관리 예보",
+      "thumbnail": "https://i.ytimg.com/vi/lIvAI_va8LU/mqdefault.jpg",
+      "publishedAt": "2026-08-04T11:00:09Z",
+      "url": "https://www.youtube.com/watch?v=lIvAI_va8LU",
+      "durationSeconds": 319,
+      "durationText": "5:19",
+      "viewCount": 1862,
+      "likeCount": 57,
       "products": [],
       "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 넝쿨템 메이크업 손민수",
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 오늘의 관리 예보 메이크업 손민수",
       "transcriptFetched": false
     }
   ]
