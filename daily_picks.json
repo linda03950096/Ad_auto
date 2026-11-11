@@ -1,6 +1,6 @@
 {
-  "date": "2026-11-10",
-  "generatedAt": "2026-11-10T05:12:25.956688+00:00",
+  "date": "2026-11-11",
+  "generatedAt": "2026-11-11T03:44:53.227552+00:00",
   "timeWindow": "숏폼/롱폼 분리",
   "sections": {
     "shorts": {
@@ -16,7 +16,7 @@
           "url": "https://www.youtube.com/watch?v=uFP9ek5GTwE",
           "durationSeconds": 11,
           "durationText": "0:11",
-          "viewCount": 243163,
+          "viewCount": 243250,
           "likeCount": 1207,
           "products": [],
           "hashtags": [],
@@ -32,27 +32,11 @@
           "url": "https://www.youtube.com/watch?v=CI9vOFPWf5o",
           "durationSeconds": 28,
           "durationText": "0:28",
-          "viewCount": 13523,
-          "likeCount": 29,
+          "viewCount": 13697,
+          "likeCount": 30,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽의 인생템 메이크업 손민수",
-          "transcriptFetched": false
-        },
-        {
-          "videoId": "-mQaatg189s",
-          "title": "아기피부 만드는 아이돌들의 진짜 미백 루틴",
-          "channelTitle": "파우치털이범",
-          "thumbnail": "https://i.ytimg.com/vi/-mQaatg189s/mqdefault.jpg",
-          "publishedAt": "2026-10-11T13:30:37Z",
-          "url": "https://www.youtube.com/watch?v=-mQaatg189s",
-          "durationSeconds": 30,
-          "durationText": "0:30",
-          "viewCount": 9075,
-          "likeCount": 142,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 파우치털이범 메이크업 손민수",
           "transcriptFetched": false
         },
         {
@@ -64,11 +48,27 @@
           "url": "https://www.youtube.com/watch?v=uAGDsW3TpAU",
           "durationSeconds": 24,
           "durationText": "0:24",
-          "viewCount": 4891,
+          "viewCount": 4911,
           "likeCount": 27,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 남쪽구슬 메이크업 손민수",
+          "transcriptFetched": false
+        },
+        {
+          "videoId": "r6O1OVTTe6M",
+          "title": "강주은이 착하게 살기 포기하고 올해 사고 쳐서 산 가방",
+          "channelTitle": "셀럽콕콕",
+          "thumbnail": "https://i.ytimg.com/vi/r6O1OVTTe6M/mqdefault.jpg",
+          "publishedAt": "2026-10-12T09:00:39Z",
+          "url": "https://www.youtube.com/watch?v=r6O1OVTTe6M",
+          "durationSeconds": 19,
+          "durationText": "0:19",
+          "viewCount": 4192,
+          "likeCount": 15,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽콕콕 메이크업 손민수",
           "transcriptFetched": false
         },
         {
@@ -92,24 +92,7 @@
     "longs": {
       "label": "롱폼",
       "timeWindow": "최근 30일",
-      "videos": [
-        {
-          "videoId": "TtkwrXiqnWo",
-          "title": "셀럽 말고, 이번엔 우리 엄마 💐ㅣ고향 구례에서 엄마 메이크업 해드렸어요ㅣ중년 메이크업 꿀팁!",
-          "channelTitle": "민킴 minkimmakeup",
-          "thumbnail": "https://i.ytimg.com/vi/TtkwrXiqnWo/mqdefault.jpg",
-          "publishedAt": "2026-10-23T10:00:03Z",
-          "url": "https://www.youtube.com/watch?v=TtkwrXiqnWo",
-          "durationSeconds": 1027,
-          "durationText": "17:07",
-          "viewCount": 12483,
-          "likeCount": 244,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 민킴 minkimmakeup 메이크업 손민수",
-          "transcriptFetched": false
-        }
-      ]
+      "videos": []
     }
   },
   "videos": [
@@ -122,7 +105,7 @@
       "url": "https://www.youtube.com/watch?v=uFP9ek5GTwE",
       "durationSeconds": 11,
       "durationText": "0:11",
-      "viewCount": 243163,
+      "viewCount": 243250,
       "likeCount": 1207,
       "products": [],
       "hashtags": [],
@@ -138,27 +121,11 @@
       "url": "https://www.youtube.com/watch?v=CI9vOFPWf5o",
       "durationSeconds": 28,
       "durationText": "0:28",
-      "viewCount": 13523,
-      "likeCount": 29,
+      "viewCount": 13697,
+      "likeCount": 30,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽의 인생템 메이크업 손민수",
-      "transcriptFetched": false
-    },
-    {
-      "videoId": "-mQaatg189s",
-      "title": "아기피부 만드는 아이돌들의 진짜 미백 루틴",
-      "channelTitle": "파우치털이범",
-      "thumbnail": "https://i.ytimg.com/vi/-mQaatg189s/mqdefault.jpg",
-      "publishedAt": "2026-10-11T13:30:37Z",
-      "url": "https://www.youtube.com/watch?v=-mQaatg189s",
-      "durationSeconds": 30,
-      "durationText": "0:30",
-      "viewCount": 9075,
-      "likeCount": 142,
-      "products": [],
-      "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 파우치털이범 메이크업 손민수",
       "transcriptFetched": false
     },
     {
@@ -170,11 +137,27 @@
       "url": "https://www.youtube.com/watch?v=uAGDsW3TpAU",
       "durationSeconds": 24,
       "durationText": "0:24",
-      "viewCount": 4891,
+      "viewCount": 4911,
       "likeCount": 27,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 남쪽구슬 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "r6O1OVTTe6M",
+      "title": "강주은이 착하게 살기 포기하고 올해 사고 쳐서 산 가방",
+      "channelTitle": "셀럽콕콕",
+      "thumbnail": "https://i.ytimg.com/vi/r6O1OVTTe6M/mqdefault.jpg",
+      "publishedAt": "2026-10-12T09:00:39Z",
+      "url": "https://www.youtube.com/watch?v=r6O1OVTTe6M",
+      "durationSeconds": 19,
+      "durationText": "0:19",
+      "viewCount": 4192,
+      "likeCount": 15,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽콕콕 메이크업 손민수",
       "transcriptFetched": false
     },
     {
@@ -191,22 +174,6 @@
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 봉지 메이크업 손민수",
-      "transcriptFetched": false
-    },
-    {
-      "videoId": "TtkwrXiqnWo",
-      "title": "셀럽 말고, 이번엔 우리 엄마 💐ㅣ고향 구례에서 엄마 메이크업 해드렸어요ㅣ중년 메이크업 꿀팁!",
-      "channelTitle": "민킴 minkimmakeup",
-      "thumbnail": "https://i.ytimg.com/vi/TtkwrXiqnWo/mqdefault.jpg",
-      "publishedAt": "2026-10-23T10:00:03Z",
-      "url": "https://www.youtube.com/watch?v=TtkwrXiqnWo",
-      "durationSeconds": 1027,
-      "durationText": "17:07",
-      "viewCount": 12483,
-      "likeCount": 244,
-      "products": [],
-      "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 민킴 minkimmakeup 메이크업 손민수",
       "transcriptFetched": false
     }
   ]
