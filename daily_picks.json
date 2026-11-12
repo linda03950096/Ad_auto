@@ -1,28 +1,12 @@
 {
-  "date": "2026-11-11",
-  "generatedAt": "2026-11-11T03:44:53.227552+00:00",
+  "date": "2026-11-12",
+  "generatedAt": "2026-11-12T04:53:32.105362+00:00",
   "timeWindow": "숏폼/롱폼 분리",
   "sections": {
     "shorts": {
       "label": "숏폼",
       "timeWindow": "최근 30일",
       "videos": [
-        {
-          "videoId": "uFP9ek5GTwE",
-          "title": "맥 직원이 추천한 생얼 필수템",
-          "channelTitle": "꿀템클릭",
-          "thumbnail": "https://i.ytimg.com/vi/uFP9ek5GTwE/mqdefault.jpg",
-          "publishedAt": "2026-10-16T02:35:42Z",
-          "url": "https://www.youtube.com/watch?v=uFP9ek5GTwE",
-          "durationSeconds": 11,
-          "durationText": "0:11",
-          "viewCount": 243250,
-          "likeCount": 1207,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 꿀템클릭 메이크업 손민수",
-          "transcriptFetched": false
-        },
         {
           "videoId": "CI9vOFPWf5o",
           "title": "최강동안 72년생 김가연의 주름 없는 동안 메이크업",
@@ -32,8 +16,8 @@
           "url": "https://www.youtube.com/watch?v=CI9vOFPWf5o",
           "durationSeconds": 28,
           "durationText": "0:28",
-          "viewCount": 13697,
-          "likeCount": 30,
+          "viewCount": 13858,
+          "likeCount": 29,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽의 인생템 메이크업 손민수",
@@ -48,27 +32,11 @@
           "url": "https://www.youtube.com/watch?v=uAGDsW3TpAU",
           "durationSeconds": 24,
           "durationText": "0:24",
-          "viewCount": 4911,
+          "viewCount": 4928,
           "likeCount": 27,
           "products": [],
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 남쪽구슬 메이크업 손민수",
-          "transcriptFetched": false
-        },
-        {
-          "videoId": "r6O1OVTTe6M",
-          "title": "강주은이 착하게 살기 포기하고 올해 사고 쳐서 산 가방",
-          "channelTitle": "셀럽콕콕",
-          "thumbnail": "https://i.ytimg.com/vi/r6O1OVTTe6M/mqdefault.jpg",
-          "publishedAt": "2026-10-12T09:00:39Z",
-          "url": "https://www.youtube.com/watch?v=r6O1OVTTe6M",
-          "durationSeconds": 19,
-          "durationText": "0:19",
-          "viewCount": 4192,
-          "likeCount": 15,
-          "products": [],
-          "hashtags": [],
-          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽콕콕 메이크업 손민수",
           "transcriptFetched": false
         },
         {
@@ -86,32 +54,65 @@
           "hashtags": [],
           "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 봉지 메이크업 손민수",
           "transcriptFetched": false
+        },
+        {
+          "videoId": "zqNs-BBUly0",
+          "title": "이시안이 소개 안 했으면 큰일 날 뻔했다는 블러셔",
+          "channelTitle": "셀럽에딧",
+          "thumbnail": "https://i.ytimg.com/vi/zqNs-BBUly0/mqdefault.jpg",
+          "publishedAt": "2026-10-14T10:00:14Z",
+          "url": "https://www.youtube.com/watch?v=zqNs-BBUly0",
+          "durationSeconds": 16,
+          "durationText": "0:16",
+          "viewCount": 2905,
+          "likeCount": 2,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽에딧 메이크업 손민수",
+          "transcriptFetched": false
+        },
+        {
+          "videoId": "-K-5ILONOFQ",
+          "title": "연예인들도 쓰고 있다는 머리숱 급격히 줄어들 때 써야 하는 인생템",
+          "channelTitle": "셀럽템포",
+          "thumbnail": "https://i.ytimg.com/vi/-K-5ILONOFQ/mqdefault.jpg",
+          "publishedAt": "2026-10-17T14:15:04Z",
+          "url": "https://www.youtube.com/watch?v=-K-5ILONOFQ",
+          "durationSeconds": 22,
+          "durationText": "0:22",
+          "viewCount": 2118,
+          "likeCount": 8,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽템포 메이크업 손민수",
+          "transcriptFetched": false
         }
       ]
     },
     "longs": {
       "label": "롱폼",
       "timeWindow": "최근 30일",
-      "videos": []
+      "videos": [
+        {
+          "videoId": "TtkwrXiqnWo",
+          "title": "셀럽 말고, 이번엔 우리 엄마 💐ㅣ고향 구례에서 엄마 메이크업 해드렸어요ㅣ중년 메이크업 꿀팁!",
+          "channelTitle": "민킴 minkimmakeup",
+          "thumbnail": "https://i.ytimg.com/vi/TtkwrXiqnWo/mqdefault.jpg",
+          "publishedAt": "2026-10-23T10:00:03Z",
+          "url": "https://www.youtube.com/watch?v=TtkwrXiqnWo",
+          "durationSeconds": 1027,
+          "durationText": "17:07",
+          "viewCount": 12533,
+          "likeCount": 245,
+          "products": [],
+          "hashtags": [],
+          "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 민킴 minkimmakeup 메이크업 손민수",
+          "transcriptFetched": false
+        }
+      ]
     }
   },
   "videos": [
-    {
-      "videoId": "uFP9ek5GTwE",
-      "title": "맥 직원이 추천한 생얼 필수템",
-      "channelTitle": "꿀템클릭",
-      "thumbnail": "https://i.ytimg.com/vi/uFP9ek5GTwE/mqdefault.jpg",
-      "publishedAt": "2026-10-16T02:35:42Z",
-      "url": "https://www.youtube.com/watch?v=uFP9ek5GTwE",
-      "durationSeconds": 11,
-      "durationText": "0:11",
-      "viewCount": 243250,
-      "likeCount": 1207,
-      "products": [],
-      "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 꿀템클릭 메이크업 손민수",
-      "transcriptFetched": false
-    },
     {
       "videoId": "CI9vOFPWf5o",
       "title": "최강동안 72년생 김가연의 주름 없는 동안 메이크업",
@@ -121,8 +122,8 @@
       "url": "https://www.youtube.com/watch?v=CI9vOFPWf5o",
       "durationSeconds": 28,
       "durationText": "0:28",
-      "viewCount": 13697,
-      "likeCount": 30,
+      "viewCount": 13858,
+      "likeCount": 29,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽의 인생템 메이크업 손민수",
@@ -137,27 +138,11 @@
       "url": "https://www.youtube.com/watch?v=uAGDsW3TpAU",
       "durationSeconds": 24,
       "durationText": "0:24",
-      "viewCount": 4911,
+      "viewCount": 4928,
       "likeCount": 27,
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 남쪽구슬 메이크업 손민수",
-      "transcriptFetched": false
-    },
-    {
-      "videoId": "r6O1OVTTe6M",
-      "title": "강주은이 착하게 살기 포기하고 올해 사고 쳐서 산 가방",
-      "channelTitle": "셀럽콕콕",
-      "thumbnail": "https://i.ytimg.com/vi/r6O1OVTTe6M/mqdefault.jpg",
-      "publishedAt": "2026-10-12T09:00:39Z",
-      "url": "https://www.youtube.com/watch?v=r6O1OVTTe6M",
-      "durationSeconds": 19,
-      "durationText": "0:19",
-      "viewCount": 4192,
-      "likeCount": 15,
-      "products": [],
-      "hashtags": [],
-      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽콕콕 메이크업 손민수",
       "transcriptFetched": false
     },
     {
@@ -174,6 +159,54 @@
       "products": [],
       "hashtags": [],
       "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 봉지 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "zqNs-BBUly0",
+      "title": "이시안이 소개 안 했으면 큰일 날 뻔했다는 블러셔",
+      "channelTitle": "셀럽에딧",
+      "thumbnail": "https://i.ytimg.com/vi/zqNs-BBUly0/mqdefault.jpg",
+      "publishedAt": "2026-10-14T10:00:14Z",
+      "url": "https://www.youtube.com/watch?v=zqNs-BBUly0",
+      "durationSeconds": 16,
+      "durationText": "0:16",
+      "viewCount": 2905,
+      "likeCount": 2,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽에딧 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "-K-5ILONOFQ",
+      "title": "연예인들도 쓰고 있다는 머리숱 급격히 줄어들 때 써야 하는 인생템",
+      "channelTitle": "셀럽템포",
+      "thumbnail": "https://i.ytimg.com/vi/-K-5ILONOFQ/mqdefault.jpg",
+      "publishedAt": "2026-10-17T14:15:04Z",
+      "url": "https://www.youtube.com/watch?v=-K-5ILONOFQ",
+      "durationSeconds": 22,
+      "durationText": "0:22",
+      "viewCount": 2118,
+      "likeCount": 8,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 셀럽템포 메이크업 손민수",
+      "transcriptFetched": false
+    },
+    {
+      "videoId": "TtkwrXiqnWo",
+      "title": "셀럽 말고, 이번엔 우리 엄마 💐ㅣ고향 구례에서 엄마 메이크업 해드렸어요ㅣ중년 메이크업 꿀팁!",
+      "channelTitle": "민킴 minkimmakeup",
+      "thumbnail": "https://i.ytimg.com/vi/TtkwrXiqnWo/mqdefault.jpg",
+      "publishedAt": "2026-10-23T10:00:03Z",
+      "url": "https://www.youtube.com/watch?v=TtkwrXiqnWo",
+      "durationSeconds": 1027,
+      "durationText": "17:07",
+      "viewCount": 12533,
+      "likeCount": 245,
+      "products": [],
+      "hashtags": [],
+      "postText": "링크를 통해 구매 시 일정 수수료를 지급 받을 수 있습니다.\n\n✺ 민킴 minkimmakeup 메이크업 손민수",
       "transcriptFetched": false
     }
   ]
